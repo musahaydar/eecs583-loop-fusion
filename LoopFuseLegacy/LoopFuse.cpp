@@ -111,7 +111,7 @@ enum FusionDependenceAnalysisChoice {
 };
 
 static cl::opt<FusionDependenceAnalysisChoice> FusionDependenceAnalysis(
-    "loop-fusion-dependence-analysis",
+    "loop-fusion-legacy-dependence-analysis",
     cl::desc("Which dependence analysis should loop fusion use?"),
     cl::values(clEnumValN(FUSION_DEPENDENCE_ANALYSIS_SCEV, "scev",
                           "Use the scalar evolution interface"),
@@ -122,13 +122,13 @@ static cl::opt<FusionDependenceAnalysisChoice> FusionDependenceAnalysis(
     cl::Hidden, cl::init(FUSION_DEPENDENCE_ANALYSIS_ALL));
 
 static cl::opt<unsigned> FusionPeelMaxCount(
-    "loop-fusion-peel-max-count", cl::init(0), cl::Hidden,
+    "loop-fusion-legacy-peel-max-count", cl::init(0), cl::Hidden,
     cl::desc("Max number of iterations to be peeled from a loop, such that "
              "fusion can take place"));
 
 #ifndef NDEBUG
 static cl::opt<bool>
-    VerboseFusionDebugging("loop-fusion-verbose-debug",
+    VerboseFusionDebugging("loop-fusion-legacy-verbose-debug",
                            cl::desc("Enable verbose debugging for Loop Fusion"),
                            cl::Hidden, cl::init(false));
 #endif
@@ -1696,7 +1696,8 @@ private:
     // mergeLatch may remove the only block in FC1.
     SE.forgetLoop(FC1.L);
     SE.forgetLoop(FC0.L);
-    SE.forgetLoopDispositions();
+    SE.forgetLoopDispositions(FC1.L);
+    SE.forgetLoopDispositions(FC0.L);
 
     // Move instructions from FC0.Latch to FC1.Latch.
     // Note: mergeLatch requires an updated DT.
@@ -1989,7 +1990,8 @@ private:
     // mergeLatch may remove the only block in FC1.
     SE.forgetLoop(FC1.L);
     SE.forgetLoop(FC0.L);
-    SE.forgetLoopDispositions();
+    SE.forgetLoopDispositions(FC1.L);
+    SE.forgetLoopDispositions(FC0.L);
 
     // Move instructions from FC0.Latch to FC1.Latch.
     // Note: mergeLatch requires an updated DT.
