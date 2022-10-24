@@ -1,5 +1,6 @@
 #!/bin/bash
-# Usage: viz.sh hw2correctN or vis.sh hw2correctN.fplicm [TYPE]
+# Usage: viz.sh benchmark or vis.sh benchmark [TYPE]
+# Do not add ".bc" to the end of the benchmark name, the script will find the file benchmark.bc
 # TYPE should be one of: cfg, cfg-only, dom, dom-only, postdom, postdom-only.
 # Default type is cfg.
 
@@ -11,33 +12,14 @@ VIZ_TYPE=${2:-cfg}
 OUTPUT_DIR=$(realpath ./dot)  # will put .pdf file here
 TMP_DIR=$OUTPUT_DIR/tmp       # will put .dot files here
 BITCODE_DIR=$(pwd)            # run this script from the same dir as bitcode
+BITCODE=$BITCODE_DIR/$BENCH.bc
 
 mkdir -p $OUTPUT_DIR
 mkdir -p $TMP_DIR
 cd $TMP_DIR
 
-# If profile data available, use it
-PROF_FLAGS=""
-if [[ $VIZ_TYPE == "cfg" ]]; then
-  PROF_DATA=$BITCODE_DIR/$BENCH.profdata
-  if [[ -f $PROF_DATA ]]; then
-    echo "Using prof data in visualization"
-    PROF_FLAGS="-pgo-instr-use -pgo-test-profile-file=$PROF_DATA -cfg-weights"
-  else
-    echo "No prof data, not including it in visualization"
-  fi
-fi
-
-# If not vizzing a special bitcode file, use .ls.bc,
-# otherwise use .bc
-if [[ $BENCH != *"."* ]]; then
-  BITCODE=$BITCODE_DIR/$BENCH.ls.bc
-else
-  BITCODE=$BITCODE_DIR/$BENCH.bc
-fi
-
 # Generate .dot files in tmp dir
-opt $PROF_FLAGS -enable-new-pm=0 -dot-$VIZ_TYPE $BITCODE > /dev/null
+opt -enable-new-pm=0 -dot-$VIZ_TYPE $BITCODE > /dev/null
 
 # Combine .dot files into PDF
 if [[ $VIZ_TYPE == "cfg" ]]; then
