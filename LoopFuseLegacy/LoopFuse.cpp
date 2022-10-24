@@ -1696,6 +1696,8 @@ private:
     // mergeLatch may remove the only block in FC1.
     SE.forgetLoop(FC1.L);
     SE.forgetLoop(FC0.L);
+    // musa: used to be SE.forgetLoopDispositions();
+    // this hack is a guess as to which args are needed
     SE.forgetLoopDispositions(FC1.L);
     SE.forgetLoopDispositions(FC0.L);
 
@@ -1990,6 +1992,8 @@ private:
     // mergeLatch may remove the only block in FC1.
     SE.forgetLoop(FC1.L);
     SE.forgetLoop(FC0.L);
+    // musa: used to be SE.forgetLoopDispositions();
+    // this hack is a guess as to which args are needed
     SE.forgetLoopDispositions(FC1.L);
     SE.forgetLoopDispositions(FC0.L);
 
