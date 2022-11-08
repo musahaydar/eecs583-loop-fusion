@@ -2106,7 +2106,16 @@ PreservedAnalyses LoopFusePass::run(Function &F, FunctionAnalysisManager &AM) {
 
 char LoopFuseLegacy::ID = 0;
 
-INITIALIZE_PASS_BEGIN(LoopFuseLegacy, "loop-fusion", "Loop Fusion", false,
+static RegisterPass<LoopFuseLegacy> X("loop-fusion-legacy", "Legacy Loop Fusion Pass",
+                             false /* Only looks at CFG */,
+                             false /* Analysis Pass */);
+
+// static RegisterStandardPasses Y(
+//     PassManagerBuilder::EP_EarlyAsPossible,
+//     [](const PassManagerBuilder &Builder,
+//        legacy::PassManagerBase &PM) { PM.add(new Hello()); });
+
+INITIALIZE_PASS_BEGIN(LoopFuseLegacy, "loop-fusion-legacy", "Loop Fusion", false,
                       false)
 INITIALIZE_PASS_DEPENDENCY(PostDominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
@@ -2116,6 +2125,6 @@ INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(OptimizationRemarkEmitterWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
-INITIALIZE_PASS_END(LoopFuseLegacy, "loop-fusion", "Loop Fusion", false, false)
+INITIALIZE_PASS_END(LoopFuseLegacy, "loop-fusion-legacy", "Loop Fusion", false, false)
 
 FunctionPass *llvm::createLoopFusePass() { return new LoopFuseLegacy(); }
