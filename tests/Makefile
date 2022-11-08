@@ -9,7 +9,7 @@ legacy:
 
 legacy-debug:
 	clang -emit-llvm $(test).cpp -c -o no-opt.bc  # compile program to bitcode
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-legacy -loop-fusion-legacy-verbose-debug  < no-opt.bc
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-legacy -loop-fusion-legacy-verbose-debug -debug < no-opt.bc
 
 clean:
 	rm -f *.bc
