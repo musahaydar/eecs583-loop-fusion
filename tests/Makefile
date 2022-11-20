@@ -3,13 +3,17 @@
 no-opt:
 	clang -emit-llvm $(test).cpp -c -o no-opt.bc
 
+built-in-debug:
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -debug -loop-fusion -loop-fusion-verbose-debug < no-opt.bc
+
 legacy:
-	clang -emit-llvm $(test).cpp -c -o no-opt.bc  # compile program to bitcode
+	$(MAKE) no-opt
 	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-legacy < no-opt.bc > /dev/null
 
 legacy-debug:
-	clang -emit-llvm $(test).cpp -c -o no-opt.bc  # compile program to bitcode
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-legacy -loop-fusion-legacy-verbose-debug -debug < no-opt.bc
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -debug -loop-fusion-legacy -loop-fusion-legacy-verbose-debug < no-opt.bc
 
 clean:
 	rm -f *.bc
