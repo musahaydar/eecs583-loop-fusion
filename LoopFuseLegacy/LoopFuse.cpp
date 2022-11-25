@@ -44,7 +44,10 @@
 /// above. These can be added to the current implementation in the future.
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Scalar/LoopFuse.h"
+// Musa: use local header file
+// #include "llvm/Transforms/Scalar/LoopFuse.h"
+#include "LoopFuse.h"
+
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/DependenceAnalysis.h"
@@ -67,6 +70,8 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/CodeMoverUtils.h"
 #include "llvm/Transforms/Utils/LoopPeel.h"
+// Musa: added for old PM
+// #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 using namespace llvm;
 
@@ -1696,7 +1701,7 @@ private:
     // mergeLatch may remove the only block in FC1.
     SE.forgetLoop(FC1.L);
     SE.forgetLoop(FC0.L);
-    // musa: used to be SE.forgetLoopDispositions();
+    // Musa: used to be SE.forgetLoopDispositions();
     // this hack is a guess as to which args are needed
     SE.forgetLoopDispositions(FC1.L);
     SE.forgetLoopDispositions(FC0.L);
@@ -1992,7 +1997,7 @@ private:
     // mergeLatch may remove the only block in FC1.
     SE.forgetLoop(FC1.L);
     SE.forgetLoop(FC0.L);
-    // musa: used to be SE.forgetLoopDispositions();
+    // Musa: used to be SE.forgetLoopDispositions();
     // this hack is a guess as to which args are needed
     SE.forgetLoopDispositions(FC1.L);
     SE.forgetLoopDispositions(FC0.L);
@@ -2080,7 +2085,7 @@ struct LoopFuseLegacy : public FunctionPass {
 };
 } // namespace
 
-PreservedAnalyses LoopFusePass::run(Function &F, FunctionAnalysisManager &AM) {
+PreservedAnalyses LoopFuseLegacyPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto &LI = AM.getResult<LoopAnalysis>(F);
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &DI = AM.getResult<DependenceAnalysis>(F);
@@ -2106,15 +2111,6 @@ PreservedAnalyses LoopFusePass::run(Function &F, FunctionAnalysisManager &AM) {
 
 char LoopFuseLegacy::ID = 0;
 
-static RegisterPass<LoopFuseLegacy> X("loop-fusion-legacy", "Legacy Loop Fusion Pass",
-                             false /* Only looks at CFG */,
-                             false /* Analysis Pass */);
-
-// static RegisterStandardPasses Y(
-//     PassManagerBuilder::EP_EarlyAsPossible,
-//     [](const PassManagerBuilder &Builder,
-//        legacy::PassManagerBase &PM) { PM.add(new Hello()); });
-
 INITIALIZE_PASS_BEGIN(LoopFuseLegacy, "loop-fusion-legacy", "Loop Fusion", false,
                       false)
 INITIALIZE_PASS_DEPENDENCY(PostDominatorTreeWrapperPass)
@@ -2128,3 +2124,13 @@ INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
 INITIALIZE_PASS_END(LoopFuseLegacy, "loop-fusion-legacy", "Loop Fusion", false, false)
 
 FunctionPass *llvm::createLoopFusePass() { return new LoopFuseLegacy(); }
+
+// Musa: added to register this pass with old PM
+static RegisterPass<LoopFuseLegacy> X("loop-fusion-legacy", "Legacy Loop Fusion Pass",
+                             false /* Only looks at CFG */,
+                             false /* Analysis Pass */);
+
+// static RegisterStandardPasses Y(
+//     PassManagerBuilder::EP_EarlyAsPossible,
+//     [](const PassManagerBuilder &Builder,
+//        legacy::PassManagerBase &PM) { PM.add(new LoopFuseLegacy()); });
