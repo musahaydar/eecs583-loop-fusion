@@ -1,7 +1,7 @@
-# To use: make no-opt test=normal-test1
+# To use: make no-opt test=normal-test1.cpp
 
 no-opt:
-	clang -emit-llvm $(test).cpp -c -o no-opt.bc
+	clang -emit-llvm $(test) -c -o no-opt.bc
 
 built-in-debug:
 	$(MAKE) no-opt
