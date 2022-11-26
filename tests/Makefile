@@ -9,11 +9,19 @@ built-in-debug:
 
 legacy:
 	$(MAKE) no-opt
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-legacy < no-opt.bc > /dev/null
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION_LEGACY.so -loop-fusion-legacy < no-opt.bc > /dev/null
 
 legacy-debug:
 	$(MAKE) no-opt
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -debug -loop-fusion-legacy -loop-fusion-legacy-verbose-debug < no-opt.bc
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION_LEGACY.so -debug -loop-fusion-legacy -loop-fusion-legacy-verbose-debug < no-opt.bc
+
+loop-fuse:
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-583 < no-opt.bc > /dev/null
+
+loop-fuse-debug:
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuse/LOOP_FUSION.so -debug -loop-fusion-583 -loop-fusion-583-verbose-debug < no-opt.bc
 
 compare:
 	clang no-opt.bc -o test_no_opt
