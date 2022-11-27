@@ -4,13 +4,15 @@ using namespace std;
 int main() {
     int A[5] = {0, 0, 0, 0, 0};
     int B[5] = {0, 0, 0, 0, 0};
-    // these two loops should not be fused
-    for (int i = 0; i < 5; ++i) {
+
+    // these two loops should be merged
+    for (int i = 0; i < 4; ++i) {
         A[i] = i;
     }
+    A[0] = 5;
+    B[0] = 5;
     for (int j = 0; j < 5; ++j) {
-        int index = (j+1) % 5;
-        B[j] = A[index]*2;
+        B[j] = j;
     }
 
     // printing
