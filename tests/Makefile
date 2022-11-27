@@ -27,6 +27,10 @@ loop-fuse-debug:
 	$(MAKE) no-opt
 	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuse/LOOP_FUSION.so -debug -loop-fusion-583 -loop-fusion-583-verbose-debug < no-opt.bc
 
+trip-count:
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/TripCountDebug/TRIP_COUNT.so -trip-count -debug < no-opt.bc
+
 compare:
 	clang no-opt.bc -o test_no_opt
 	clang fused.bc -o test_fused
