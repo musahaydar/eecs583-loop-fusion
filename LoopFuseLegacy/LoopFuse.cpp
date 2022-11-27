@@ -336,6 +336,14 @@ struct FusionCandidate {
       return false;
     }
 
+    auto trip_count = SE.getConstantMaxBackedgeTakenCount(L);
+    if (isa<SCEVCouldNotCompute>(trip_count)) {
+      LLVM_DEBUG(dbgs() << "Could not solve trip count for  " << L->getName() << "\n");
+    }
+    else {
+      auto tc_value = dyn_cast<SCEVConstant>(trip_count);
+       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << tc_value <<"\n");
+    }
     // Require ScalarEvolution to be able to determine a trip count.
     if (!SE.hasLoopInvariantBackedgeTakenCount(L)) {
       LLVM_DEBUG(dbgs() << "Loop " << L->getName()
@@ -2060,8 +2068,11 @@ struct LoopFuseLegacy : public FunctionPass {
   }
 
   bool runOnFunction(Function &F) override {
-    if (skipFunction(F))
-      return false;
+    LLVM_DEBUG(dbgs() << "Considering function " << F.getName() << " as fusion candidate \n");
+    // if (skipFunction(F)) {
+    //   LLVM_DEBUG(dbgs() << "Skipping function " << F.getName() << " as fusion candidate \n");
+    //   return false;
+    // }
 
     auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
@@ -2075,6 +2086,7 @@ struct LoopFuseLegacy : public FunctionPass {
     const DataLayout &DL = F.getParent()->getDataLayout();
 
     LoopFuser LF(LI, DT, DI, SE, PDT, ORE, DL, AC, TTI);
+    LLVM_DEBUG(dbgs() << "Trying to fuse function " << F.getName() << "\n");
     return LF.fuseLoops(F);
   }
 };
