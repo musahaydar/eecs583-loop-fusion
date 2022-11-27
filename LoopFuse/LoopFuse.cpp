@@ -44,8 +44,6 @@
 /// above. These can be added to the current implementation in the future.
 //===----------------------------------------------------------------------===//
 
-// Musa: use local header file
-// #include "llvm/Transforms/Scalar/LoopFuse.h"
 #include "LoopFuse.h"
 
 #include "llvm/ADT/Statistic.h"
@@ -116,7 +114,7 @@ enum FusionDependenceAnalysisChoice {
 };
 
 static cl::opt<FusionDependenceAnalysisChoice> FusionDependenceAnalysis(
-    "loop-fusion-legacy-dependence-analysis",
+    "loop-fusion-583-dependence-analysis",
     cl::desc("Which dependence analysis should loop fusion use?"),
     cl::values(clEnumValN(FUSION_DEPENDENCE_ANALYSIS_SCEV, "scev",
                           "Use the scalar evolution interface"),
@@ -127,13 +125,13 @@ static cl::opt<FusionDependenceAnalysisChoice> FusionDependenceAnalysis(
     cl::Hidden, cl::init(FUSION_DEPENDENCE_ANALYSIS_ALL));
 
 static cl::opt<unsigned> FusionPeelMaxCount(
-    "loop-fusion-legacy-peel-max-count", cl::init(0), cl::Hidden,
+    "loop-fusion-583-peel-max-count", cl::init(0), cl::Hidden,
     cl::desc("Max number of iterations to be peeled from a loop, such that "
              "fusion can take place"));
 
 #ifndef NDEBUG
 static cl::opt<bool>
-    VerboseFusionDebugging("loop-fusion-legacy-verbose-debug",
+    VerboseFusionDebugging("loop-fusion-583-verbose-debug",
                            cl::desc("Enable verbose debugging for Loop Fusion"),
                            cl::Hidden, cl::init(false));
 #endif
@@ -341,14 +339,6 @@ struct FusionCandidate {
       return false;
     }
 
-    auto trip_count = SE.getConstantMaxBackedgeTakenCount(L);
-    if (isa<SCEVCouldNotCompute>(trip_count)) {
-      LLVM_DEBUG(dbgs() << "Could not solve trip count for  " << L->getName() << "\n");
-    }
-    else {
-      auto tc_value = dyn_cast<SCEVConstant>(trip_count);
-       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << tc_value <<"\n");
-    }
     // Require ScalarEvolution to be able to determine a trip count.
     if (!SE.hasLoopInvariantBackedgeTakenCount(L)) {
       LLVM_DEBUG(dbgs() << "Loop " << L->getName()
@@ -2047,12 +2037,12 @@ private:
   }
 };
 
-struct LoopFuseLegacy : public FunctionPass {
+struct LoopFuse583 : public FunctionPass {
 
   static char ID;
 
-  LoopFuseLegacy() : FunctionPass(ID) {
-    initializeLoopFuseLegacyPass(*PassRegistry::getPassRegistry());
+  LoopFuse583() : FunctionPass(ID) {
+    // initializeLoopFuseLegacyPass(*PassRegistry::getPassRegistry());
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -2073,11 +2063,8 @@ struct LoopFuseLegacy : public FunctionPass {
   }
 
   bool runOnFunction(Function &F) override {
-    LLVM_DEBUG(dbgs() << "Considering function " << F.getName() << " as fusion candidate \n");
-    // if (skipFunction(F)) {
-    //   LLVM_DEBUG(dbgs() << "Skipping function " << F.getName() << " as fusion candidate \n");
-    //   return false;
-    // }
+    if (skipFunction(F))
+      return false;
 
     auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
@@ -2091,13 +2078,12 @@ struct LoopFuseLegacy : public FunctionPass {
     const DataLayout &DL = F.getParent()->getDataLayout();
 
     LoopFuser LF(LI, DT, DI, SE, PDT, ORE, DL, AC, TTI);
-    LLVM_DEBUG(dbgs() << "Trying to fuse function " << F.getName() << "\n");
     return LF.fuseLoops(F);
   }
 };
 } // namespace
 
-PreservedAnalyses LoopFuseLegacyPass::run(Function &F, FunctionAnalysisManager &AM) {
+PreservedAnalyses LoopFuse583Pass::run(Function &F, FunctionAnalysisManager &AM) {
   auto &LI = AM.getResult<LoopAnalysis>(F);
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &DI = AM.getResult<DependenceAnalysis>(F);
@@ -2121,28 +2107,9 @@ PreservedAnalyses LoopFuseLegacyPass::run(Function &F, FunctionAnalysisManager &
   return PA;
 }
 
-char LoopFuseLegacy::ID = 0;
-
-INITIALIZE_PASS_BEGIN(LoopFuseLegacy, "loop-fusion-legacy", "Loop Fusion", false,
-                      false)
-INITIALIZE_PASS_DEPENDENCY(PostDominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(DependenceAnalysisWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(OptimizationRemarkEmitterWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
-INITIALIZE_PASS_END(LoopFuseLegacy, "loop-fusion-legacy", "Loop Fusion", false, false)
-
-FunctionPass *llvm::createLoopFusePass() { return new LoopFuseLegacy(); }
+char LoopFuse583::ID = 0;
 
 // Musa: added to register this pass with old PM
-static RegisterPass<LoopFuseLegacy> X("loop-fusion-legacy", "Legacy Loop Fusion Pass",
+static RegisterPass<LoopFuse583> X("loop-fusion-583", "Loop Fusion Pass",
                              false /* Only looks at CFG */,
                              false /* Analysis Pass */);
-
-// static RegisterStandardPasses Y(
-//     PassManagerBuilder::EP_EarlyAsPossible,
-//     [](const PassManagerBuilder &Builder,
-//        legacy::PassManagerBase &PM) { PM.add(new LoopFuseLegacy()); });

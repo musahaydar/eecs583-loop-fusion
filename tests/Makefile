@@ -1,16 +1,43 @@
-# To use: make no-opt test=normal-test1
+# To use: make no-opt test=normal-test1.cpp
 
 no-opt:
-	clang -emit-llvm $(test).cpp -c -o no-opt.bc
+	clang -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
+
+built-in-debug:
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -debug -loop-fusion -loop-fusion-verbose-debug < no-opt.bc
 
 legacy:
-	clang -emit-llvm $(test).cpp -c -o no-opt.bc  # compile program to bitcode
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so  -analyze -scalar-evolution -mem2reg --loop-simplify -loop-fusion-legacy < no-opt.bc > /dev/null
+	$(MAKE) clean-test
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION_LEGACY.so -loop-fusion-legacy < no-opt.bc > /dev/null
 
 legacy-debug:
-	clang -emit-llvm $(test).cpp -c -o no-opt.bc  # compile program to bitcode
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so  -analyze -scalar-evolution -mem2reg --loop-simplify -loop-fusion-legacy -loop-fusion-legacy-verbose-debug -debug < no-opt.bc
+	$(MAKE) clean-test
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION_LEGACY.so -debug -loop-fusion-legacy -loop-fusion-legacy-verbose-debug < no-opt.bc
+
+loop-fuse:
+	$(MAKE) clean-test
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseLegacy/LOOP_FUSION.so -loop-fusion-583 < no-opt.bc > /dev/null
+
+loop-fuse-debug:
+	$(MAKE) clean-test
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuse/LOOP_FUSION.so -debug -loop-fusion-583 -loop-fusion-583-verbose-debug < no-opt.bc
+
+compare:
+	clang no-opt.bc -o test_no_opt
+	clang fused.bc -o test_fused
+	./test_no_opt > res_no_opt
+	./test_fused > res_fused
+	diff res_no_opt res_fused
+
+clean-test:
+	-rm -f *.bc
+	-rm res_* test_*
 
 clean:
-	rm -f *.bc
-	rm -ri dot
+	$(MAKE) clean-test
+	-rm -ri dot
