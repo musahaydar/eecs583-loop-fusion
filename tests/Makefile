@@ -1,7 +1,10 @@
 # To use: make no-opt test=normal-test1.cpp
 
 no-opt:
-	clang -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
+	clang -O0 -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
+
+no-opt-cpp:
+	clang++ -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
 
 built-in-debug:
 	$(MAKE) no-opt
@@ -29,7 +32,7 @@ loop-fuse-debug:
 
 trip-count:
 	$(MAKE) no-opt
-	opt -enable-new-pm=0 -o fused.bc -load ../build/TripCountDebug/TRIP_COUNT.so -trip-count -debug < no-opt.bc
+	opt -enable-new-pm=0 -o fused.bc -load ../build/TripCountDebug/TRIP_COUNT.so -trip-count -debug -analyze -mem2reg -indvars -loop-simplify -scalar-evolution < no-opt.bc
 
 compare:
 	clang no-opt.bc -o test_no_opt

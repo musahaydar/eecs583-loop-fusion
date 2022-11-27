@@ -38,12 +38,14 @@ struct TripCountPass : public LoopPass {
     auto &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
     auto trip_count = SE.getConstantMaxBackedgeTakenCount(L);
     if (isa<SCEVCouldNotCompute>(trip_count)) {
-      LLVM_DEBUG(dbgs() << "Could not solve trip count for  " << L->getName() << "\n");
+      LLVM_DEBUG(dbgs() << "getConstantMaxBackedgeTakenCount: Could not solve trip count for  " << L->getName() << "\n");
     }
     else {
       auto tc_value = dyn_cast<SCEVConstant>(trip_count);
-       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << tc_value <<"\n");
+       LLVM_DEBUG(dbgs() << "getConstantMaxBackedgeTakenCount: Loop trip count for " << L->getName() << " is " << tc_value <<"\n");
     }    
+    auto trip_count_constant = SE.getSmallConstantTripCount(L);
+    LLVM_DEBUG(dbgs() << "getSmallConstantTripCount: Loop trip count for " << L->getName() << " is " << trip_count_constant <<"\n");
     return Changed;
   }
 
