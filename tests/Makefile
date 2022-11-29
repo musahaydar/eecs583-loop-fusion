@@ -1,10 +1,12 @@
 # To use: make no-opt test=normal-test1.cpp
 
+# no-opt recipe preps loops for loop fusion by running other necessary passes
 no-opt:
 	clang -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
+	opt -enable-new-pm=0 -loop-rotate -o no-opt.bc < no-opt.bc
 
-no-opt-cpp:
-	clang++ -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
+# no-opt-cpp:
+# 	clang++ -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
 
 built-in-debug:
 	$(MAKE) no-opt
