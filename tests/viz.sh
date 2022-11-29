@@ -1,6 +1,5 @@
 #!/bin/bash
-# Usage: viz.sh benchmark or vis.sh benchmark [TYPE]
-# Do not add ".bc" to the end of the benchmark name, the script will find the file benchmark.bc
+# Usage: viz.sh benchmark.bc or vis.sh benchmark.bc [TYPE]
 # TYPE should be one of: cfg, cfg-only, dom, dom-only, postdom, postdom-only.
 # Default type is cfg.
 
@@ -12,7 +11,7 @@ VIZ_TYPE=${2:-cfg}
 OUTPUT_DIR=$(realpath ./dot)  # will put .pdf file here
 TMP_DIR=$OUTPUT_DIR/tmp       # will put .dot files here
 BITCODE_DIR=$(pwd)            # run this script from the same dir as bitcode
-BITCODE=$BITCODE_DIR/$BENCH.bc
+BITCODE=$BITCODE_DIR/$BENCH
 
 mkdir -p $OUTPUT_DIR
 mkdir -p $TMP_DIR

@@ -22,8 +22,8 @@ cd tests
 make clean
 make legacy-debug test=<test_name>
 ```
-`<test_name>` can be something like `normal-test0`, corresponding to `normal-test0.cpp`. Note the omission of `.cpp`.
+`<test_name>` can be something like `normal-test0.cpp`, corresponding to `normal-test0.cpp`.
 
 ### Visualizing The Results
 
-In the tests dir, run `./viz.sh <bitcode>` to vizualize the CFG for the test results. `<bitcode>` can be something like `no-opt` or `fused`, corresponding to the outputs of the `Makefile` called `no-opt.bc` or `fused.bc`. Note the omission of `.bc`.
+In the tests dir, run `./viz.sh <bitcode>` to vizualize the CFG for the test results. `<bitcode>` can be something like `no-opt.bc` or `fused.bc`, corresponding to the outputs of the `Makefile` called `no-opt.bc` or `fused.bc`.
