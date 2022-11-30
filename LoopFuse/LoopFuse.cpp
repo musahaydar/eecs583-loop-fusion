@@ -1417,10 +1417,14 @@ private:
   bool isAdjacent(const FusionCandidate &FC0,
                   const FusionCandidate &FC1) const {
     // If the successor of the guard branch is FC1, then the loops are adjacent
-    if (FC0.GuardBranch)
+    if (FC0.GuardBranch) {
       return FC0.getNonLoopBlock() == FC1.getEntryBlock();
-    else
+    } else {
+      LLVM_DEBUG(dbgs() << "Checking adjacency for non-guarded loops\n";
+                 dbgs() << "Got FC0 exit block: " << FC0.ExitBlock->getName();
+                 dbgs() << ", and FC1 preheader block: " << FC1.getEntryBlock()->getName() << "\n";);
       return FC0.ExitBlock == FC1.getEntryBlock();
+    }
   }
 
   bool isEmptyPreheader(const FusionCandidate &FC) const {
