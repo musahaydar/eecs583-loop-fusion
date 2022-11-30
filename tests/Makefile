@@ -3,7 +3,8 @@
 # no-opt recipe preps loops for loop fusion by running other necessary passes
 no-opt:
 	clang -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
-	opt -enable-new-pm=0 -mem2reg -loop-rotate -o no-opt.bc < no-opt.bc
+	opt -enable-new-pm=0 -loop-simplify -mem2reg -loop-rotate -o no-opt.bc < no-opt.bc
+	opt -enable-new-pm=0 -o no-opt.bc -load ../build/RemoveEmptyBBs/REMOVE_EMPTY_BBS.so -remove-empty-bbs -debug < no-opt.bc
 
 # no-opt-cpp:
 # 	clang++ -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
