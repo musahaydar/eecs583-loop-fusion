@@ -13,7 +13,7 @@ int main() {
         y = y * (1 + j);
     }
     for (int k = 0; k < 5; ++k) {
-        y = z + k * 2;
+        z = z + k * 2;
     }
 
     // printing
