@@ -1,7 +1,7 @@
 # To use: make no-opt test=normal-test1.cpp
 
 no-opt:
-	clang -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
+	clang++ --gcc-toolchain=/n/eecs583a/home/chenqy/clang_toolchain  -O -Xclang  -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
 
 built-in-debug:
 	$(MAKE) no-opt
