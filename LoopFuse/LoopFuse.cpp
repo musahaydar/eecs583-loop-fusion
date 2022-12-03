@@ -1509,27 +1509,47 @@ private:
     //    insert in exit block of second loop
     // remove intervening code basic block
   }
+
+//   1)      for(int i = 0: i < 1; i++) {
+//             A[i] = B[0];
+//         }
+// 2)      X = B[0]
+
+// 4)      for(int i = 0; i < 1; i++) {
+//             C[i] = B[0]
+//         }
   
-  bool dependent_on_loop(Instruction I, Loop L) const {
+  bool dependent_on_loop(Instruction * I, Loop * L) const {
     /* check if an instruction I if depenedent on a certain Loop L */
 
     // if RHS of instruction is updated inside loop (LHS) // write-read
-    for (auto user: I.getOperand(0)->users()) {
-      if (L->contains(user->getParent())) return true; // this is a write-read
+    for (int i = 1; i < I->getNumOperands(); i++) {
+      Value* rhs = I->getOperand(i);
+      for (auto &bbl : L->blocks()) {
+        for (auto &ist : *bbl) {
+          if (ist->getOperand(0) == rhs)  return true; // this is a write-read
+        }
+      }
+      // for (auto user: I->getOperand(i)->users()) {
+      //   if (L->contains(user->getParent())) return true; // this is a write-read
+      // }
     }
 
     // if LHS of instruction is updated inside loop (LHS) // write-write
     for (auto &bbl : L->blocks()) {
       for (auto &ist : *bbl) {
-        if (ist->getOperand(0) == I.getOperand(0))  return true; // this is a write-write
+        if (ist->getOperand(0) == I->getOperand(0))  return true; // this is a write-write
       }
     }
 
     // if LHS of instruction is read inside loop (RHS) // read-write
     for (auto &bbl : L->blocks()) {
-      
+      for (auto &ist : *bbl) {
+        for (int i = 1; i < ist->getNumOperands(); i++) {
+          if (ist->getOperand(i) == I->getOperand(0)) return true; // this is a write-read
+        } 
+      }
     }
-        return true
     return false    
 
   }
