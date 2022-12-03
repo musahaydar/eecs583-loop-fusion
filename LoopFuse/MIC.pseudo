@@ -24,6 +24,7 @@ for each instruction in intervening_code
         movable = true
     if !movable
         error "cant be fused"
+        return false?
 figure out dependences between MIC instructions
 for each instruction
     check if all dependences got moved in the same spot (take all intersection)

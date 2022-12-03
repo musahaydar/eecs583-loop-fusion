@@ -43,6 +43,10 @@
 /// the conditions for fusion are discussed in more detail in the document
 /// above. These can be added to the current implementation in the future.
 //===----------------------------------------------------------------------===//
+// 3 libraries added by Julia
+#include <vector>
+#include <map>
+#include <algorithm>
 
 #include "LoopFuse.h"
 
@@ -900,10 +904,15 @@ private:
           }
 
           if (!isAdjacent(*FC0, *FC1)) {
-            LLVM_DEBUG(dbgs()
-                       << "Fusion candidates are not adjacent. Not fusing.\n");
-            reportLoopFusion<OptimizationRemarkMissed>(*FC0, *FC1, NonAdjacent);
-            continue;
+            if(!movableIC(*FC0, *FC1)) {
+              LLVM_DEBUG(dbgs()
+                        << "Fusion candidates are not adjacent and not movable. Not fusing.\n");
+              reportLoopFusion<OptimizationRemarkMissed>(*FC0, *FC1, NonAdjacent);
+              continue;
+            }
+            else {
+              move_intervening_code(*FC0, *FC1);
+            }
           }
 
           if (!FC0->GuardBranch && FC1->GuardBranch) {
@@ -1421,6 +1430,108 @@ private:
       return FC0.getNonLoopBlock() == FC1.getEntryBlock();
     else
       return FC0.ExitBlock == FC1.getEntryBlock();
+  }
+  
+  bool movableIC(const FusionCandidate &FC0,
+               const FusionCandidate &FC1) const {
+
+    // TODO: worry about MIC with multiple basic blocks
+
+    std::vector<Instruction*> move_up = {};
+    std::vector<Instruction*> move_down = {};
+    std::map< Instruction*, std::vector<Instruction*> > MIC_dependencies;
+
+    for(BasicBlock::iterator Instr = FC0.ExitBlock->begin(), endInstr = FC0.ExitBlock->end(); Instr != endInstr; ++Instr) {
+      // For every instruction in the exit block (intervening code)
+      bool movable = false;
+      if(!dependent_on_loop(Instr, FC0)) {
+        // Instruction is not dependent on second loop
+        move_up.push_back(Instr);
+        movable = true;
+      }
+      if(!dependent_on_loop(Instr, FC1)) {
+        // Instruction is not dependent on second loop
+        move_down.push_back(Instr);
+        movable = true;
+      }
+      if (!movable) {
+        // Instruction can't be moved up nor down
+        return false;
+      }
+
+      for(auto user: Instr->getOperand(0)->users()) {
+        if(Instr->getParent() == user->getParent()) {
+          // dependent instruction is also intervening code, add to map of dependencies
+          if(MIC_dependencies.find(Instr) == MIC_dependencies.end()) {
+              potentialHoists[Instr] = std::vector<Instruction*>{user};
+          }
+          else {
+              MIC_dependencies[Instr].push_back(user);
+          }
+        }
+      }
+
+    }
+
+    for(std::map<Key,Val>::iterator iter = MIC_dependencies.begin(); iter != MIC_dependencies.end(); ++iter) {
+      // for each instruction
+      for(auto dependence: MIC_dependencies[iter->first]) {
+        // for each dependent instr of instruction
+        if (std::find(move_up.begin(), move_up.end(), iter->first) != move_up.end() && std::find(move_up.begin(), move_up.end(), dependence) != move_up.end()) {
+          // both in move_up, remove from move_down
+          move_down.erase(std::find(move_down.begin(), move_down.end(), iter->first));
+          move_down.erase(std::find(move_down.begin(), move_down.end(), dependence));
+        }
+        else if(std::find(move_down.begin(), move_down.end(), iter->first) != move_down.end() && std::find(move_down.begin(), move_down.end(), dependence) != move_down.end()) {
+          // both in move_down, remove from move_up
+          move_up.erase(std::find(move_up.begin(), move_up.end(), iter->first));
+          move_up.erase(std::find(move_up.begin(), move_up.end(), dependence));
+        }
+        else {
+          // not movable in same direction, can't fuse
+          return false;
+        }
+      }
+    }
+
+    // if move_up.size() + move_down.size() != FC0.ExitBlock->size() {
+    //   return false;
+    // }
+    
+    return true;
+  }
+  
+  void remove_intervening_code(const FusionCandidate &FC0,
+               const FusionCandidate &FC1) {
+    // for instructions in move up
+    //    insert in preheader
+    // for instructions in move down
+    //    insert in exit block of second loop
+    // remove intervening code basic block
+  }
+  
+  bool dependent_on_loop(Instruction I, Loop L) const {
+    /* check if an instruction I if depenedent on a certain Loop L */
+
+    // if RHS of instruction is updated inside loop (LHS) // write-read
+    for (auto user: I.getOperand(0)->users()) {
+      if (L->contains(user->getParent())) return true; // this is a write-read
+    }
+
+    // if LHS of instruction is updated inside loop (LHS) // write-write
+    for (auto &bbl : L->blocks()) {
+      for (auto &ist : *bbl) {
+        if (ist->getOperand(0) == I.getOperand(0))  return true; // this is a write-write
+      }
+    }
+
+    // if LHS of instruction is read inside loop (RHS) // read-write
+    for (auto &bbl : L->blocks()) {
+      
+    }
+        return true
+    return false    
+
   }
 
   bool isEmptyPreheader(const FusionCandidate &FC) const {
