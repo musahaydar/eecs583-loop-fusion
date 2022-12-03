@@ -1530,9 +1530,6 @@ private:
           if (ist->getOperand(0) == rhs)  return true; // this is a write-read
         }
       }
-      // for (auto user: I->getOperand(i)->users()) {
-      //   if (L->contains(user->getParent())) return true; // this is a write-read
-      // }
     }
 
     // if LHS of instruction is updated inside loop (LHS) // write-write
@@ -1550,8 +1547,7 @@ private:
         } 
       }
     }
-    return false    
-
+    return false;
   }
 
   bool isEmptyPreheader(const FusionCandidate &FC) const {
