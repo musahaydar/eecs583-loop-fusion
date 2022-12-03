@@ -47,48 +47,55 @@ struct RemoveEmptyBBs : public FunctionPass {
       }
       
       // this BB can be removed
-      MergeBlockIntoPredecessor(&bb);
-      changed = true;
+      // this crashes LLVM for some reason :(
+      // MergeBlockIntoSuccessor(&bb);
+      // changed = true;
 
-      // for (BasicBlock *pred : predecessors(&bb)) {
-      //   BranchInst *pred_br = (BranchInst *)pred->getTerminator();
+      for (BasicBlock *pred : predecessors(&bb)) {
+        BranchInst *pred_br = (BranchInst *)pred->getTerminator();
 
-      //   // loop through all this blocks preds to point to it's succ
-      //   for(int i = 0; i < pred_br->getNumSuccessors(); ++i) {
-      //     if (pred_br->getSuccessor(i) == &bb) {
-      //       pred_br->setSuccessor(i, target);
-      //       changed = true;
+        // loop through all this blocks preds to point to it's succ
+        for(int i = 0; i < pred_br->getNumSuccessors(); ++i) {
+          if (pred_br->getSuccessor(i) == &bb) {
+            pred_br->setSuccessor(i, target);
+            changed = true;
 
-      //       // update phi nodes in target
-      //       for (Instruction &inst : *target) {
-      //         if(isa<PHINode>(inst)) {
-      //           PHINode *phi = (PHINode *)&inst;
+            // update phi nodes in target
+            // for (Instruction &inst : *target) {
+            //   if(isa<PHINode>(inst)) {
+            //     PHINode *phi = (PHINode *)&inst;
 
-      //           LLVM_DEBUG(dbgs() << "\tLooking at PHINode:\n");
-      //           LLVM_DEBUG(phi->print(dbgs()));
-      //           LLVM_DEBUG(dbgs() << "\n");
+            //     LLVM_DEBUG(dbgs() << "\tLooking at PHINode:\n");
+            //     LLVM_DEBUG(phi->print(dbgs()));
+            //     LLVM_DEBUG(dbgs() << "\n");
 
-      //           // check all incoming values for the phi node to see if any are from this bb we're deleting
-      //           for (int j = 0; j < phi->getNumIncomingValues(); ++j) {
-      //             BasicBlock *incoming = phi->getIncomingBlock(j);
-      //             LLVM_DEBUG(dbgs() << "\t\tPHINode has parent block: " << incoming->getName() << "\n");
+            //     // check all incoming values for the phi node to see if any are from this bb we're deleting
+            //     for (int j = 0; j < phi->getNumIncomingValues(); ++j) {
+            //       BasicBlock *incoming = phi->getIncomingBlock(j);
+            //       LLVM_DEBUG(dbgs() << "\t\tPHINode has parent block: " << incoming->getName() << "\n");
                   
-      //             if (incoming == &bb) {
-      //               // phi->setIncomingBlock(j, pred);
-      //               phi->replaceIncomingBlockWith(incoming, pred);
-      //               LLVM_DEBUG(dbgs() << "\t\tReplacing " << incoming->getName() << " with " << pred->getName() << "\n");
-      //             }
-      //           }
-      //         }
-      //       }
-      //       updatePhiNodes(target, &bb, pred);
+            //       if (incoming == &bb) {
+            //         // phi->setIncomingBlock(j, pred);
+            //         phi->replaceIncomingBlockWith(incoming, pred);
+            //         LLVM_DEBUG(dbgs() << "\t\tReplacing " << incoming->getName() << " with " << pred->getName() << "\n");
+            //       }
+            //     }
+            //   }
+            // }
+            updatePhiNodes(target, &bb, pred);    
+          }
+        }
 
-      //       // remove the basic block
-      //       // DeleteDeadBlock(&bb); 
-      //       // TODO
-      //     }
-      //   }
-      // }
+        // delete the branch from the pred
+        bb.back().eraseFromParent();
+
+        // Add unreachable to now empty BB.
+        new UnreachableInst(bb.getContext(), &bb);
+
+        // remove the basic block
+        // this is crashing, I can't explain why
+        // DeleteDeadBlock(&bb);
+      }
     }
 
     return changed;
