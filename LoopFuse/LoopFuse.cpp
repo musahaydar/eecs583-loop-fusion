@@ -1513,11 +1513,12 @@ private:
       //insert to the end of the preheader
       FC0.Preheader->getInstList().push_back(*instr);
     }
-    Instruction *original_first_inst = FC1.ExitBlock->getInstList().at(0);
+    Instruction *original_first_inst = &(*FC1.ExitBlock->begin());
     for (std::vector<Instruction*>::iterator instr = move_down.begin(), e = move_down.end(); instr != e; ++instr) {
       //insert to the begining of the second loops exit block
       //Inserts inst before original_first_inst in FC1.ExitBlock
-      FC1.ExitBlock->getInstList().insert(original_first_inst, **instr);
+      // FC1.ExitBlock->getInstList().insert(original_first_inst, **instr);
+      (*instr)->insertBefore(original_first_inst);
     }
 
     //TODO: remove intervening code basic block (or blocks)
