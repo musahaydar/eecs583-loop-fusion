@@ -59,29 +59,6 @@ struct RemoveEmptyBBs : public FunctionPass {
           if (pred_br->getSuccessor(i) == &bb) {
             pred_br->setSuccessor(i, target);
             changed = true;
-
-            // update phi nodes in target
-            // for (Instruction &inst : *target) {
-            //   if(isa<PHINode>(inst)) {
-            //     PHINode *phi = (PHINode *)&inst;
-
-            //     LLVM_DEBUG(dbgs() << "\tLooking at PHINode:\n");
-            //     LLVM_DEBUG(phi->print(dbgs()));
-            //     LLVM_DEBUG(dbgs() << "\n");
-
-            //     // check all incoming values for the phi node to see if any are from this bb we're deleting
-            //     for (int j = 0; j < phi->getNumIncomingValues(); ++j) {
-            //       BasicBlock *incoming = phi->getIncomingBlock(j);
-            //       LLVM_DEBUG(dbgs() << "\t\tPHINode has parent block: " << incoming->getName() << "\n");
-                  
-            //       if (incoming == &bb) {
-            //         // phi->setIncomingBlock(j, pred);
-            //         phi->replaceIncomingBlockWith(incoming, pred);
-            //         LLVM_DEBUG(dbgs() << "\t\tReplacing " << incoming->getName() << " with " << pred->getName() << "\n");
-            //       }
-            //     }
-            //   }
-            // }
             updatePhiNodes(target, &bb, pred);    
           }
         }
