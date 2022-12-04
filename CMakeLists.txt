@@ -7,3 +7,4 @@ include_directories(${LLVM_INCLUDE_DIRS})                 # You don't need to ch
 add_subdirectory(LoopFuseLegacy)
 add_subdirectory(LoopFuse)
 add_subdirectory(TripCountDebug)
+add_subdirectory(RemoveEmptyBBs)
