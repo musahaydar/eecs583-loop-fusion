@@ -38,6 +38,11 @@ loop-fuse-debug:
 	$(MAKE) no-opt
 	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuse/LOOP_FUSION.so -debug -loop-fusion-583 -loop-fusion-583-verbose-debug < no-opt.bc
 
+loop-fuse-stable-debug:
+	$(MAKE) clean-test
+	$(MAKE) no-opt
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseStable/LOOP_FUSION.so -debug -loop-fusion-583  < no-opt.bc
+
 trip-count:
 	$(MAKE) no-opt
 	opt -enable-new-pm=0 -o fused.bc -load ../build/TripCountDebug/TRIP_COUNT.so -trip-count -debug -analyze -mem2reg -indvars -loop-simplify -scalar-evolution < no-opt.bc

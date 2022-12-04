@@ -1444,23 +1444,26 @@ private:
                const FusionCandidate &FC1) {
 
     // TODO: worry about MIC with multiple basic blocks
-    
-
+  
     for(auto &Instr : *FC0.ExitBlock) {
+      dbgs() << "movableIC: considering Instr: " << Instr << '\n';
       // For every instruction in the exit block (intervening code)
       bool movable = false;
       if(!dependent_on_loop(&Instr, FC0.L)) {
-        // Instruction is not dependent on second loop
+        dbgs() << "movableIC: Instr: " << Instr << "is not dependent on the first loop" << '\n';
+        // Instruction is not dependent on first loop
         move_up.push_back(&Instr);
         movable = true;
       }
       if(!dependent_on_loop(&Instr, FC1.L)) {
+        dbgs() << "movableIC: Instr: " << Instr << "is not dependent on the second loop" << '\n';
         // Instruction is not dependent on second loop
         move_down.push_back(&Instr);
         movable = true;
       }
       if (!movable) {
         // Instruction can't be moved up nor down
+        dbgs() << "Instr: " << Instr << "is not movable." << '\n';
         return false;
       }
 

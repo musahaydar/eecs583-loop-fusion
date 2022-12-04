@@ -46,6 +46,7 @@ struct TripCountPass : public LoopPass {
     }    
     auto trip_count_constant = SE.getSmallConstantTripCount(L);
     LLVM_DEBUG(dbgs() << "getSmallConstantTripCount: Loop trip count for " << L->getName() << " is " << trip_count_constant <<"\n");
+    LLVM_DEBUG(dbgs() << "getExitBlock: " << L->getExitBlock()->getName() << "\n");
     return Changed;
   }
 
