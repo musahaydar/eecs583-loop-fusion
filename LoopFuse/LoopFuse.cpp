@@ -1503,11 +1503,30 @@ private:
   
   void remove_intervening_code(const FusionCandidate &FC0,
                const FusionCandidate &FC1) {
+
+    //assuming we have access to move_up and move_down
+    // for instructions in move up
+    for (Vector::iterator instr = move_up->begin(), e = move_up->end(); instr != e; ++instr) {
+      //insert to the end of the preheader
+      FC0.Preheader->getInstList().push_back(**instr);
+    }
+    Instruction *original_first_inst = FC1.ExitBlock->getInstList().at(0);
+    for (Vector::iterator instr = move_down->begin(), e = move_down->end(); instr != e; ++instr) {
+      //insert to the begining of the second loops exit block
+      //Inserts inst before original_first_inst in FC1.ExitBlock
+      FC1.ExitBlock->getInstList().insert(original_first_inst, **instr);
+    }
+
+    //TODO: remove intervening code basic block (or blocks)
+            //(but we might have to re-add an exit block with a branch to the next for loop)
+    return;
+
     // for instructions in move up
     //    insert in preheader
     // for instructions in move down
     //    insert in exit block of second loop
-    // remove intervening code basic block
+    // remove intervening code basic block -> 
+            //(but we might have to re-add an exit block with a branch to the next for loop)
   }
 
 //   1)      for(int i = 0: i < 1; i++) {
