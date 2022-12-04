@@ -42,12 +42,18 @@ trip-count:
 	$(MAKE) no-opt
 	opt -enable-new-pm=0 -o fused.bc -load ../build/TripCountDebug/TRIP_COUNT.so -trip-count -debug -analyze -mem2reg -indvars -loop-simplify -scalar-evolution < no-opt.bc
 
+# compare results after running fusion on a test
 compare:
 	clang no-opt.bc -o test_no_opt
 	clang fused.bc -o test_fused
 	./test_no_opt > res_no_opt
 	./test_fused > res_fused
 	diff res_no_opt res_fused
+
+# generate graphs after running fusion on a test
+viz:
+	./viz.sh no-opt.bc
+	./viz.sh fused.bc
 
 clean-test:
 	-rm -f *.bc
