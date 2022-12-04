@@ -568,6 +568,10 @@ private:
   AssumptionCache &AC;
   const TargetTransformInfo &TTI;
 
+  std::vector<Instruction*> move_up = {};
+  std::vector<Instruction*> move_down = {};
+  std::map<Instruction*, std::vector<Instruction*> > MIC_dependencies;
+
 public:
   LoopFuser(LoopInfo &LI, DominatorTree &DT, DependenceInfo &DI,
             ScalarEvolution &SE, PostDominatorTree &PDT,
@@ -1433,25 +1437,22 @@ private:
   }
   
   bool movableIC(const FusionCandidate &FC0,
-               const FusionCandidate &FC1) const {
+               const FusionCandidate &FC1) {
 
     // TODO: worry about MIC with multiple basic blocks
 
-    std::vector<Instruction*> move_up = {};
-    std::vector<Instruction*> move_down = {};
-    std::map< Instruction*, std::vector<Instruction*> > MIC_dependencies;
 
-    for(BasicBlock::iterator Instr = FC0.ExitBlock->begin(), endInstr = FC0.ExitBlock->end(); Instr != endInstr; ++Instr) {
+    for(auto &Instr : *FC0.ExitBlock) {
       // For every instruction in the exit block (intervening code)
       bool movable = false;
-      if(!dependent_on_loop(Instr, FC0)) {
+      if(!dependent_on_loop(&Instr, FC0.L)) {
         // Instruction is not dependent on second loop
-        move_up.push_back(Instr);
+        move_up.push_back(&Instr);
         movable = true;
       }
-      if(!dependent_on_loop(Instr, FC1)) {
+      if(!dependent_on_loop(&Instr, FC1.L)) {
         // Instruction is not dependent on second loop
-        move_down.push_back(Instr);
+        move_down.push_back(&Instr);
         movable = true;
       }
       if (!movable) {
@@ -1459,21 +1460,23 @@ private:
         return false;
       }
 
-      for(auto user: Instr->getOperand(0)->users()) {
-        if(Instr->getParent() == user->getParent()) {
-          // dependent instruction is also intervening code, add to map of dependencies
-          if(MIC_dependencies.find(Instr) == MIC_dependencies.end()) {
-              potentialHoists[Instr] = std::vector<Instruction*>{user};
-          }
-          else {
-              MIC_dependencies[Instr].push_back(user);
+      for(auto user: Instr.getOperand(0)->users()) {
+        if (auto user_ist = dyn_cast<Instruction>(user)) {
+          if (Instr.getParent() == user_ist->getParent()) {
+            // dependent instruction is also intervening code, add to map of dependencies
+            if(MIC_dependencies.find(&Instr) == MIC_dependencies.end()) {
+                MIC_dependencies[&Instr] = std::vector<Instruction*>{user_ist};
+            }
+            else {
+                MIC_dependencies[&Instr].push_back(user_ist);
+            }
           }
         }
       }
 
     }
 
-    for(std::map<Key,Val>::iterator iter = MIC_dependencies.begin(); iter != MIC_dependencies.end(); ++iter) {
+    for(std::map<Instruction*, std::vector<Instruction*>>::iterator iter = MIC_dependencies.begin(); iter != MIC_dependencies.end(); ++iter) {
       // for each instruction
       for(auto dependence: MIC_dependencies[iter->first]) {
         // for each dependent instr of instruction
@@ -1501,17 +1504,17 @@ private:
     return true;
   }
   
-  void remove_intervening_code(const FusionCandidate &FC0,
+  void move_intervening_code(const FusionCandidate &FC0,
                const FusionCandidate &FC1) {
 
     //assuming we have access to move_up and move_down
     // for instructions in move up
-    for (Vector::iterator instr = move_up->begin(), e = move_up->end(); instr != e; ++instr) {
+    for (std::vector<Instruction*>::iterator instr = move_up.begin(), e = move_up.end(); instr != e; ++instr) {
       //insert to the end of the preheader
-      FC0.Preheader->getInstList().push_back(**instr);
+      FC0.Preheader->getInstList().push_back(*instr);
     }
     Instruction *original_first_inst = FC1.ExitBlock->getInstList().at(0);
-    for (Vector::iterator instr = move_down->begin(), e = move_down->end(); instr != e; ++instr) {
+    for (std::vector<Instruction*>::iterator instr = move_down.begin(), e = move_down.end(); instr != e; ++instr) {
       //insert to the begining of the second loops exit block
       //Inserts inst before original_first_inst in FC1.ExitBlock
       FC1.ExitBlock->getInstList().insert(original_first_inst, **instr);
@@ -1538,7 +1541,7 @@ private:
 //             C[i] = B[0]
 //         }
   
-  bool dependent_on_loop(Instruction * I, Loop * L) const {
+  bool dependent_on_loop(Instruction * I, Loop * L) {
     /* check if an instruction I if depenedent on a certain Loop L */
 
     // if RHS of instruction is updated inside loop (LHS) // write-read
@@ -1546,7 +1549,7 @@ private:
       Value* rhs = I->getOperand(i);
       for (auto &bbl : L->blocks()) {
         for (auto &ist : *bbl) {
-          if (ist->getOperand(0) == rhs)  return true; // this is a write-read
+          if (ist.getOperand(0) == rhs)  return true; // this is a write-read
         }
       }
     }
@@ -1554,15 +1557,15 @@ private:
     // if LHS of instruction is updated inside loop (LHS) // write-write
     for (auto &bbl : L->blocks()) {
       for (auto &ist : *bbl) {
-        if (ist->getOperand(0) == I->getOperand(0))  return true; // this is a write-write
+        if (ist.getOperand(0) == I->getOperand(0))  return true; // this is a write-write
       }
     }
 
     // if LHS of instruction is read inside loop (RHS) // read-write
     for (auto &bbl : L->blocks()) {
       for (auto &ist : *bbl) {
-        for (int i = 1; i < ist->getNumOperands(); i++) {
-          if (ist->getOperand(i) == I->getOperand(0)) return true; // this is a write-read
+        for (int i = 1; i < ist.getNumOperands(); i++) {
+          if (ist.getOperand(i) == I->getOperand(0)) return true; // this is a write-read
         } 
       }
     }
