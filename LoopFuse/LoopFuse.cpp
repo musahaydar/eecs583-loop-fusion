@@ -1440,7 +1440,7 @@ private:
                const FusionCandidate &FC1) {
 
     // TODO: worry about MIC with multiple basic blocks
-
+    
 
     for(auto &Instr : *FC0.ExitBlock) {
       // For every instruction in the exit block (intervening code)
@@ -1515,29 +1515,23 @@ private:
     }
     Instruction *original_first_inst = &(*FC1.ExitBlock->begin());
     for (std::vector<Instruction*>::iterator instr = move_down.begin(), e = move_down.end(); instr != e; ++instr) {
-      //insert to the begining of the second loops exit block
-      //Inserts inst before original_first_inst in FC1.ExitBlock
-      // FC1.ExitBlock->getInstList().insert(original_first_inst, **instr);
+      // insert to the begining of the second loops exit block
+      //  FC1.ExitBlock->getInstList().insert(original_first_inst, **instr); //Inserts inst before original_first_inst in FC1.ExitBlock
       (*instr)->insertBefore(original_first_inst);
     }
 
-    //TODO: remove intervening code basic block (or blocks)
-            //(but we might have to re-add an exit block with a branch to the next for loop)
+    //TODO: remove intervening code basic block (or blocks) //(but we might have to re-add an exit block with a branch to the next for loop)
     return;
 
-    // for instructions in move up
-    //    insert in preheader
-    // for instructions in move down
-    //    insert in exit block of second loop
-    // remove intervening code basic block -> 
-            //(but we might have to re-add an exit block with a branch to the next for loop)
   }
 
 //   1)      for(int i = 0: i < 1; i++) {
 //             A[i] = B[0];
 //         }
 // 2)      X = B[0]
-
+//         if 1 == 1 {
+//              return X
+//         }  
 // 4)      for(int i = 0; i < 1; i++) {
 //             C[i] = B[0]
 //         }
