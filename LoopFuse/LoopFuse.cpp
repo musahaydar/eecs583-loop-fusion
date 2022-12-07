@@ -910,9 +910,6 @@ private:
               reportLoopFusion<OptimizationRemarkMissed>(*FC0, *FC1, NonAdjacent);
               continue;
             }
-            // else {
-            //   move_intervening_code(*FC0, *FC1);
-            // }
           }
 
           if (!FC0->GuardBranch && FC1->GuardBranch) {
@@ -1436,105 +1433,70 @@ private:
     }
   }
   
-  //what if we call moveableIC multiple times depending on how many intervening blocks we have
   bool attempt_MIC(const FusionCandidate &FC0,
-               const FusionCandidate &FC1) {
+                const FusionCandidate &FC1) {
+    
+    std::vector<BasicBlock*> move_up = {};
+    std::vector<BasicBlock*> move_down = {};
+    std::queue<BasicBlock*> MIC_bb;
+    int Num_bb = 0;
+    
+    // Start with the first intervening block
+    MIC_bb.push(FC0.ExitBlock);
+    while(!MIC_bb.empty()) {
 
-    std::vector<Instruction*> move_up = {};
-    std::vector<Instruction*> move_down = {};
-    std::map<Instruction*, std::vector<Instruction*> > MIC_dependencies;
-  
-    for(auto &Instr : *FC0.ExitBlock) {
-      dbgs() << "movableIC: considering Instr: " << Instr << '\n';
-      // For every instruction in the exit block (intervening code)
+      // Remove basic block that we're working with from queue and increment # of basic blocks
+      BasicBlock* curr_bb = MIC_bb.top();
+      MIC_bb.pop();
+      ++Num_bb;
+      
       bool movable = false;
-      if(!dependent_on_loop(&Instr, FC0.L)) {
-        dbgs() << "movableIC: Instr: " << Instr << "is not dependent on the first loop" << '\n';
-        // Instruction is not dependent on first loop
-        move_up.push_back(&Instr);
+      if !BB_dependent_on_loop(curr_bb, FC0) {
+        // Not dependent on first loop, potentially move up
+        move_up.push(curr_bb);
         movable = true;
       }
-      if(!dependent_on_loop(&Instr, FC1.L)) {
-        dbgs() << "movableIC: Instr: " << Instr << "is not dependent on the second loop" << '\n';
-        // Instruction is not dependent on second loop
-        move_down.push_back(&Instr);
+      if !BB_dependent_on_loop(curr_bb, FC1) {
+        // Not dependent on second loop, potentially move down
+        move_down.push(curr_bb);
         movable = true;
       }
-      if (!movable) {
-        // if (the unmovable instruction is not the branch to the next loop) {
-        //     return false;
-        // }
-        return false
+      if !movable {
+        // Dependent on both loops, can't be fused
+        return false;
       }
 
-      for(auto user: Instr.getOperand(0)->users()) {
-        if (auto user_ist = dyn_cast<Instruction>(user)) {
-          if (Instr.getParent() == user_ist->getParent()) {
-            // dependent instruction is also intervening code, add to map of dependencies
-            if(MIC_dependencies.find(&Instr) == MIC_dependencies.end()) {
-                MIC_dependencies[&Instr] = std::vector<Instruction*>{user_ist};
-            }
-            else {
-                MIC_dependencies[&Instr].push_back(user_ist);
-            }
-          }
+      // Get more intervening code
+      for auto succ: succesors(curr_bb) {
+        if(succ != FC1) {
+          MIC_bb.push(succ);
         }
       }
 
     }
+    
+    // Attempt to move intervening code
+    return attempt_to_move(move_up, move_down, Num_bb, FC0, FC1);
 
-    for(std::map<Instruction*, std::vector<Instruction*>>::iterator iter = MIC_dependencies.begin(); iter != MIC_dependencies.end(); ++iter) {
-      // for each instruction
-      for(auto dependence: MIC_dependencies[iter->first]) {
-        // for each dependent instr of instruction
-        if (std::find(move_up.begin(), move_up.end(), iter->first) != move_up.end() && std::find(move_up.begin(), move_up.end(), dependence) != move_up.end()) {
-          // both in move_up, remove from move_down
-          move_down.erase(std::find(move_down.begin(), move_down.end(), iter->first));
-          move_down.erase(std::find(move_down.begin(), move_down.end(), dependence));
-        }
-        else if(std::find(move_down.begin(), move_down.end(), iter->first) != move_down.end() && std::find(move_down.begin(), move_down.end(), dependence) != move_down.end()) {
-          // both in move_down, remove from move_up
-          move_up.erase(std::find(move_up.begin(), move_up.end(), iter->first));
-          move_up.erase(std::find(move_up.begin(), move_up.end(), dependence));
-        }
-        else {
-          // not movable in same direction, can't fuse
-          return false;
+  }
+
+  bool BB_dependent_on_loop(BasicBlock* BB,
+                            const FusionCandidate &FC) {
+      
+      // Check if a Basic block is dependent on a loop
+      
+      for (auto Instr: *BB->getInstList()) {
+        if Instr_dependent_on_loop(Instr, FC.L) {
+          // Instruction is dependent on loop
+          return true;
         }
       }
-    }
 
-    if move_up.size() + move_down.size() != FC0.ExitBlock->size() {
+      // No instruction is dependent on the loop
       return false;
-    }
-
-    move_intervening_code(FC0, FC1, move_up, move_down);
-    return true;
   }
-  
-  void move_intervening_code(const FusionCandidate &FC0,
-               const FusionCandidate &FC1, 
-               std::vector<Instruction*> &move_up,
-               std::vector<Instruction*> &move_down) {
 
-    //assuming we have access to move_up and move_down
-    // for instructions in move up
-    for (std::vector<Instruction*>::iterator instr = move_up.begin(), e = move_up.end(); instr != e; ++instr) {
-      //insert to the end of the preheader
-      FC0.Preheader->getInstList().push_back(*instr);
-    }
-    Instruction *original_first_inst = &(*FC1.ExitBlock->begin());
-    for (std::vector<Instruction*>::iterator instr = move_down.begin(), e = move_down.end(); instr != e; ++instr) {
-      // insert to the begining of the second loops exit block
-      (*instr)->insertBefore(original_first_inst);
-    }
-
-    //TODO: remove intervening code basic block (or blocks)
-    return;
-
-  }
-  
-  bool dependent_on_loop(Instruction * I, Loop * L) {
+  bool Instr_dependent_on_loop(Instruction * I, Loop * L) {
     /* check if an instruction I if depenedent on a certain Loop L */
 
     // if RHS of instruction is updated inside loop (LHS) // write-read
@@ -1564,6 +1526,46 @@ private:
     }
     return false;
   }
+
+  bool attempt_to_move(std::vector<BasicBlock*> move_up,
+                       std::vector<BasicBlock*> move_down,
+                       int Num_bb,
+                       const FusionCandidate &FC0,
+                       const FusionCandidate &FC1) {
+
+    if (move_up.len() == Num_bb) {
+      // all basic blocks can be moved up
+      move_intervening_code_up(move_up, FC0, FC1);
+    }
+    else if (move_down.len() == Num_bb) {
+      // all basic blocks can be moved down
+      move_intervening_code_down(move_down, FC0, FC1);
+    }
+    else {
+      // basic blocks cannot be all move up nor down, unfusable
+      return false;
+    }
+    
+    return true;
+
+  }
+
+  void move_intervening_code_up(const FusionCandidate &FC0,
+                                const FusionCandidate & FC1) {
+
+    FC0.header->moveBefore(FC1.header);
+    // still need to update phi nodes
+   
+  }
+
+  void move_intervening_code_down(const FusionCandidate &FC0,
+                                  const FusionCandidate & FC1) {
+    
+    FC1.header->moveAfter(FC0.header);
+    // still need to update phi nodes
+
+  }
+  
 
   bool isEmptyPreheader(const FusionCandidate &FC) const {
     return FC.Preheader->size() == 1;
