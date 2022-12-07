@@ -81,3 +81,70 @@ Loop 2
             C[i] = B[i]
         }
 2)      D = A[1]
+
+--------------------------------------------------------------------------------
+
+for each intervening basic block in topological order of CFG
+    check if basic block is dependent on first loop (using pseudocode below)
+    if not dependent
+        append to move up
+        movable = true
+    check if basic block is dependent on second loop (using pseudocode below)
+    if not dependent
+        append to move down
+        movable = true
+    if not movable
+        error "can't be fused"
+for each basic block
+    get the MIC basic blocks that depend it
+    for dependences
+        if BB and dependence can't be moved in same direction
+            error "can't be fused"
+move basic blocks
+    
+
+bool bbl_dependent_on_loop(bbl, loop)
+    for each instruction in basic block
+        check if instruction is dependent on the loop
+        if dependent
+            return false
+    return true
+
+                        []
+                       /  \
+                      /    \
+                    []     []
+                   /  \
+                  /    \
+                 []    []
+
+--------------------------------------------------------------------------------
+
+
+for each basic block in intervening code
+    movable = false
+    check if basic block is dependent on first loop (BBDep)
+    if not dependent
+        append to move_up
+        movable = true
+    check if basic block is dependent on second loop (BBDep)
+    if not dependent
+        append to move_down
+        movable = true
+    if not movable
+        error can't be moved
+if move_up size == num of basic blocks
+    move all basic blocks up
+    set immediate successor of FC0 to be FC1
+else if move_down size == num of basic blocks
+    move all basic blocks down
+    set immediate successor of FC0 to be FC1
+else
+    error cant be moved
+
+BBDep:
+    for each instruction in basic block
+        check if instruction is dependent on loop
+        if dependent
+            return false
+    return true

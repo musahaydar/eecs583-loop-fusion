@@ -568,10 +568,6 @@ private:
   AssumptionCache &AC;
   const TargetTransformInfo &TTI;
 
-  std::vector<Instruction*> move_up = {};
-  std::vector<Instruction*> move_down = {};
-  std::map<Instruction*, std::vector<Instruction*> > MIC_dependencies;
-
 public:
   LoopFuser(LoopInfo &LI, DominatorTree &DT, DependenceInfo &DI,
             ScalarEvolution &SE, PostDominatorTree &PDT,
@@ -908,15 +904,15 @@ private:
           }
 
           if (!isAdjacent(*FC0, *FC1)) {
-            if(!movableIC(*FC0, *FC1)) {
+            if(!attempt_MIC(*FC0, *FC1)) {
               LLVM_DEBUG(dbgs()
                         << "Fusion candidates are not adjacent and not movable. Not fusing.\n");
               reportLoopFusion<OptimizationRemarkMissed>(*FC0, *FC1, NonAdjacent);
               continue;
             }
-            else {
-              move_intervening_code(*FC0, *FC1);
-            }
+            // else {
+            //   move_intervening_code(*FC0, *FC1);
+            // }
           }
 
           if (!FC0->GuardBranch && FC1->GuardBranch) {
@@ -1440,10 +1436,13 @@ private:
     }
   }
   
-  bool movableIC(const FusionCandidate &FC0,
+  //what if we call moveableIC multiple times depending on how many intervening blocks we have
+  bool attempt_MIC(const FusionCandidate &FC0,
                const FusionCandidate &FC1) {
 
-    // TODO: worry about MIC with multiple basic blocks
+    std::vector<Instruction*> move_up = {};
+    std::vector<Instruction*> move_down = {};
+    std::map<Instruction*, std::vector<Instruction*> > MIC_dependencies;
   
     for(auto &Instr : *FC0.ExitBlock) {
       dbgs() << "movableIC: considering Instr: " << Instr << '\n';
@@ -1462,9 +1461,10 @@ private:
         movable = true;
       }
       if (!movable) {
-        // Instruction can't be moved up nor down
-        dbgs() << "Instr: " << Instr << "is not movable." << '\n';
-        return false;
+        // if (the unmovable instruction is not the branch to the next loop) {
+        //     return false;
+        // }
+        return false
       }
 
       for(auto user: Instr.getOperand(0)->users()) {
@@ -1504,15 +1504,18 @@ private:
       }
     }
 
-    // if move_up.size() + move_down.size() != FC0.ExitBlock->size() {
-    //   return false;
-    // }
-    
+    if move_up.size() + move_down.size() != FC0.ExitBlock->size() {
+      return false;
+    }
+
+    move_intervening_code(FC0, FC1, move_up, move_down);
     return true;
   }
   
   void move_intervening_code(const FusionCandidate &FC0,
-               const FusionCandidate &FC1) {
+               const FusionCandidate &FC1, 
+               std::vector<Instruction*> &move_up,
+               std::vector<Instruction*> &move_down) {
 
     //assuming we have access to move_up and move_down
     // for instructions in move up
@@ -1523,25 +1526,13 @@ private:
     Instruction *original_first_inst = &(*FC1.ExitBlock->begin());
     for (std::vector<Instruction*>::iterator instr = move_down.begin(), e = move_down.end(); instr != e; ++instr) {
       // insert to the begining of the second loops exit block
-      //  FC1.ExitBlock->getInstList().insert(original_first_inst, **instr); //Inserts inst before original_first_inst in FC1.ExitBlock
       (*instr)->insertBefore(original_first_inst);
     }
 
-    //TODO: remove intervening code basic block (or blocks) //(but we might have to re-add an exit block with a branch to the next for loop)
+    //TODO: remove intervening code basic block (or blocks)
     return;
 
   }
-
-//   1)      for(int i = 0: i < 1; i++) {
-//             A[i] = B[0];
-//         }
-// 2)      X = B[0]
-//         if 1 == 1 {
-//              return X
-//         }  
-// 4)      for(int i = 0; i < 1; i++) {
-//             C[i] = B[0]
-//         }
   
   bool dependent_on_loop(Instruction * I, Loop * L) {
     /* check if an instruction I if depenedent on a certain Loop L */
