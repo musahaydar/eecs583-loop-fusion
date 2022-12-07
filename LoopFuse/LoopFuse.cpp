@@ -1446,28 +1446,28 @@ private:
     while(!MIC_bb.empty()) {
 
       // Remove basic block that we're working with from queue and increment # of basic blocks
-      BasicBlock* curr_bb = MIC_bb.top();
+      BasicBlock* curr_bb = MIC_bb.front();
       MIC_bb.pop();
       ++Num_bb;
       
       bool movable = false;
-      if !BB_dependent_on_loop(curr_bb, FC0) {
+      if (!BB_dependent_on_loop(curr_bb, FC0)) {
         // Not dependent on first loop, potentially move up
-        move_up.push(curr_bb);
+        move_up.push_back(curr_bb);
         movable = true;
       }
-      if !BB_dependent_on_loop(curr_bb, FC1) {
+      if (!BB_dependent_on_loop(curr_bb, FC1)) {
         // Not dependent on second loop, potentially move down
-        move_down.push(curr_bb);
+        move_down.push_back(curr_bb);
         movable = true;
       }
-      if !movable {
+      if (!movable) {
         // Dependent on both loops, can't be fused
         return false;
       }
 
       // Get more intervening code
-      for auto succ: succesors(curr_bb) {
+      for (auto succ: succesors(curr_bb)) {
         if(succ != FC1) {
           MIC_bb.push(succ);
         }
@@ -1485,8 +1485,8 @@ private:
       
       // Check if a Basic block is dependent on a loop
       
-      for (auto Instr: *BB->getInstList()) {
-        if Instr_dependent_on_loop(Instr, FC.L) {
+      for (auto Instr: BB->getInstList()) {
+        if (Instr_dependent_on_loop(Instr, FC.L)) {
           // Instruction is dependent on loop
           return true;
         }
@@ -1533,13 +1533,13 @@ private:
                        const FusionCandidate &FC0,
                        const FusionCandidate &FC1) {
 
-    if (move_up.len() == Num_bb) {
+    if (move_up.size() == Num_bb) {
       // all basic blocks can be moved up
-      move_intervening_code_up(move_up, FC0, FC1);
+      move_intervening_code_up(FC0, FC1);
     }
-    else if (move_down.len() == Num_bb) {
+    else if (move_down.size() == Num_bb) {
       // all basic blocks can be moved down
-      move_intervening_code_down(move_down, FC0, FC1);
+      move_intervening_code_down(FC0, FC1);
     }
     else {
       // basic blocks cannot be all move up nor down, unfusable
@@ -1553,7 +1553,7 @@ private:
   void move_intervening_code_up(const FusionCandidate &FC0,
                                 const FusionCandidate & FC1) {
 
-    FC0.header->moveBefore(FC1.header);
+    FC0.Header->moveBefore(FC1.Header);
     // still need to update phi nodes
    
   }
@@ -1561,7 +1561,7 @@ private:
   void move_intervening_code_down(const FusionCandidate &FC0,
                                   const FusionCandidate & FC1) {
     
-    FC1.header->moveAfter(FC0.header);
+    FC1.Header->moveAfter(FC0.Header);
     // still need to update phi nodes
 
   }
