@@ -1467,8 +1467,11 @@ private:
       }
 
       // Get more intervening code
-      for (auto succ: succesors(curr_bb)) {
-        if(succ != FC1) {
+      Instruction *terminator = curr_bb->getTerminator();
+      unsigned int num_succ = terminator->getNumSuccessors();
+      for (unsigned int i=0; i<num_succ; i++) {
+        BasicBlock *succ = terminator->getSuccessor(i);
+        if (succ != FC1.Preheader) {
           MIC_bb.push(succ);
         }
       }
@@ -1485,8 +1488,8 @@ private:
       
       // Check if a Basic block is dependent on a loop
       
-      for (auto Instr: BB->getInstList()) {
-        if (Instr_dependent_on_loop(Instr, FC.L)) {
+      for (auto &Instr: *BB) {
+        if (Instr_dependent_on_loop(&Instr, FC.L)) {
           // Instruction is dependent on loop
           return true;
         }
