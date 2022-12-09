@@ -349,7 +349,7 @@ struct FusionCandidate {
     }
     else {
       auto tc_value = dyn_cast<SCEVConstant>(trip_count);
-       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << tc_value <<"\n");
+       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << *tc_value <<"\n");
     }
 
     // Require ScalarEvolution to be able to determine a trip count.
@@ -856,11 +856,12 @@ private:
       LLVM_DEBUG(dbgs() << "Attempting fusion on Candidate Set:\n"
                         << CandidateSet << "\n");
 
-      for (auto FC0 = CandidateSet.begin(); FC0 != CandidateSet.end(); ++FC0) {
+      std::vector<FusionCandidate> CandidateVec(CandidateSet.begin(), CandidateSet.end());
+      for (auto FC0 = CandidateVec.begin(); FC0 != CandidateVec.end(); ++FC0) {
         assert(!LDT.isRemovedLoop(FC0->L) &&
                "Should not have removed loops in CandidateSet!");
         auto FC1 = FC0;
-        for (++FC1; FC1 != CandidateSet.end(); ++FC1) {
+        for (++FC1; FC1 != CandidateVec.end(); ++FC1) {
           assert(!LDT.isRemovedLoop(FC1->L) &&
                  "Should not have removed loops in CandidateSet!");
 
@@ -902,7 +903,12 @@ private:
                                                        NonEqualTripCount);
             continue;
           }
+          // auto FC00 = CandidateSet.erase(FC0, FC0);
+          // auto FC11 = CandidateSet.erase(FC1, FC1);
+          
 
+          //FusionCandidate FC_tmp0 = *FC0;
+          //FusionCandidate FC_tmp1 = *FC1;
           if (!isAdjacent(*FC0, *FC1)) {
             if(!attempt_MIC(*FC0, *FC1)) {
               LLVM_DEBUG(dbgs()
@@ -911,6 +917,7 @@ private:
               continue;
             }
           }
+          
 
           if (!FC0->GuardBranch && FC1->GuardBranch) {
             LLVM_DEBUG(dbgs() << "The second candidate is guarded while the "
@@ -1034,21 +1041,23 @@ private:
           // Notify the loop-depth-tree that these loops are not valid objects
           LDT.removeLoop(FC1->L);
 
-          CandidateSet.erase(FC0);
-          CandidateSet.erase(FC1);
+          // TODO: currently commented out to test simple test case
 
-          auto InsertPos = CandidateSet.insert(FusedCand);
+          // CandidateVec.erase(FC0);
+          // CandidateVec.erase(FC1);
 
-          assert(InsertPos.second &&
-                 "Unable to insert TargetCandidate in CandidateSet!");
+          // CandidateVec.push_back(FusedCand);
+
+          // assert(InsertPos.second &&
+          //        "Unable to insert TargetCandidate in CandidateSet!");
 
           // Reset FC0 and FC1 the new (fused) candidate. Subsequent iterations
           // of the FC1 loop will attempt to fuse the new (fused) loop with the
           // remaining candidates in the current candidate set.
-          FC0 = FC1 = InsertPos.first;
+          // FC0 = FC1 = CandidateVec.end()-1;
 
-          LLVM_DEBUG(dbgs() << "Candidate Set (after fusion): " << CandidateSet
-                            << "\n");
+          // LLVM_DEBUG(dbgs() << "Candidate Set (after fusion): " << CandidateVec
+          //                   << "\n");
 
           Fused = true;
         }
@@ -1420,8 +1429,8 @@ private:
   /// FC1. If not, then the loops are not adjacent. If the two candidates are
   /// not guarded loops, then it checks whether the exit block of \p FC0 is the
   /// preheader of \p FC1.
-  bool isAdjacent(const FusionCandidate &FC0,
-                  const FusionCandidate &FC1) const {
+  bool isAdjacent(FusionCandidate &FC0,
+                  FusionCandidate &FC1)  {
     // If the successor of the guard branch is FC1, then the loops are adjacent
     if (FC0.GuardBranch) {
       return FC0.getNonLoopBlock() == FC1.getEntryBlock();
@@ -1433,8 +1442,8 @@ private:
     }
   }
   
-  bool attempt_MIC(const FusionCandidate &FC0,
-                const FusionCandidate &FC1) {
+  bool attempt_MIC(FusionCandidate & FC0,
+                   FusionCandidate & FC1) {
     
     std::vector<BasicBlock*> move_up = {};
     std::vector<BasicBlock*> move_down = {};
@@ -1453,16 +1462,19 @@ private:
       bool movable = false;
       if (!BB_dependent_on_loop(curr_bb, FC0)) {
         // Not dependent on first loop, potentially move up
+        LLVM_DEBUG(dbgs() << curr_bb->getName() << " is not dependent on the first loop \n");
         move_up.push_back(curr_bb);
         movable = true;
       }
       if (!BB_dependent_on_loop(curr_bb, FC1)) {
         // Not dependent on second loop, potentially move down
+        LLVM_DEBUG(dbgs() << curr_bb->getName() << " is not dependent on the second loop \n");
         move_down.push_back(curr_bb);
         movable = true;
       }
       if (!movable) {
         // Dependent on both loops, can't be fused
+        LLVM_DEBUG(dbgs() << curr_bb->getName() << " is dependent on both loops \n");
         return false;
       }
 
@@ -1500,31 +1512,97 @@ private:
   }
 
   bool Instr_dependent_on_loop(Instruction * I, Loop * L) {
-    /* check if an instruction I if depenedent on a certain Loop L */
+    /* check if an instruction I is depenedent on a certain Loop L */
 
     // if RHS of instruction is updated inside loop (LHS) // write-read
-    for (int i = 1; i < I->getNumOperands(); i++) {
+    for (int i = 0; i < I->getNumOperands(); i++) {
       Value* rhs = I->getOperand(i);
+      if (dyn_cast<Constant>(rhs)) continue;
       for (auto &bbl : L->blocks()) {
         for (auto &ist : *bbl) {
-          if (ist.getOperand(0) == rhs)  return true; // this is a write-read
+          if (!ist.getType()->isVoidTy()) {
+              Value* lhs_loop = &llvm::cast<Value>(ist);
+              if (lhs_loop == rhs) {
+                LLVM_DEBUG(dbgs() << "WRITE-READ DEPENDENCE\n");
+              LLVM_DEBUG(dbgs() << *I << " write-read dependent on loop " << L->getName() << " instuction " << ist << "\n");
+              LLVM_DEBUG(dbgs() << *rhs << " in the BB is dependent on " << *lhs_loop << " in the loop\n");
+              return true; // this is a write-read
+            }
+          }
+          // if is a phi node, then all rhs must also be considered
+          if (isa<PHINode>(ist)) {
+            PHINode* ist_phi = dyn_cast<PHINode>(&ist);
+            for (int j=0; j<ist_phi->getNumIncomingValues(); j++) {
+              Value* rhs_phi = ist_phi->getIncomingValue(j);
+              if (dyn_cast<Constant>(rhs_phi)) continue;
+              if (rhs_phi == rhs) {
+                LLVM_DEBUG(dbgs() << "WRITE-READ DEPENDENCE (PHI-Node) \n");
+                LLVM_DEBUG(dbgs() << *I << " write-read dependent on loop " << L->getName() << " instuction " << ist << "\n");
+                rhs->printAsOperand(dbgs());
+                dbgs() << "\n";
+                rhs_phi->printAsOperand(dbgs());
+                dbgs() << "\n";
+                // LLVM_DEBUG(dbgs() << *rhs << " in the BB is dependent on " << *rhs_phi << " in the loop\n");
+                return true; // this is a write-read
+              }
+            }
+          }
+        }
+      } 
+    }
+    
+
+    // if there exists LHS
+    if (!I->getType()->isVoidTy()) {
+      // if LHS of instruction is updated inside loop (LHS) // write-write
+      Value* lhs = llvm::cast<Value>(I);
+      for (auto &bbl : L->blocks()) {
+        for (auto &ist : *bbl) {
+          if (!ist.getType()->isVoidTy()) {
+            Value* lhs_loop = &llvm::cast<Value>(ist);
+            if (lhs_loop == lhs) {
+              LLVM_DEBUG(dbgs() << "WRITE-WRITE DEPENDENCE\n");
+              LLVM_DEBUG(dbgs() << *I << " write-write dependent on loop " << L->getName() << " instruction " << ist << "\n");
+              LLVM_DEBUG(dbgs() << *lhs << " in the BB is dependent on " << *lhs_loop << " in the loop\n");
+              return true; // this is a write-write
+            }
+          }
+          // if is a phi node, then all rhs must also be considered
+          if (isa<PHINode>(ist)) {
+            PHINode* ist_phi = dyn_cast<PHINode>(&ist);
+            for (int j=0; j<ist_phi->getNumIncomingValues(); j++) {
+              Value* rhs_phi = ist_phi->getIncomingValue(j);
+              if (dyn_cast<Constant>(rhs_phi)) continue;
+              if (rhs_phi == lhs) {
+                LLVM_DEBUG(dbgs() << "WRITE-WRITE DEPENDENCE (PHI-Node) \n");
+                LLVM_DEBUG(dbgs() << *I << " write-write dependent on loop " << L->getName() << " instuction " << ist << "\n");
+                lhs->printAsOperand(dbgs());
+                dbgs() << "\n";
+                rhs_phi->printAsOperand(dbgs());
+                dbgs() << "\n";
+                // LLVM_DEBUG(dbgs() << *rhs << " in the BB is dependent on " << *rhs_phi << " in the loop\n");
+                return true; // this is a write-read
+              }
+            }
+          }
         }
       }
-    }
+    
 
-    // if LHS of instruction is updated inside loop (LHS) // write-write
-    for (auto &bbl : L->blocks()) {
-      for (auto &ist : *bbl) {
-        if (ist.getOperand(0) == I->getOperand(0))  return true; // this is a write-write
-      }
-    }
-
-    // if LHS of instruction is read inside loop (RHS) // read-write
-    for (auto &bbl : L->blocks()) {
-      for (auto &ist : *bbl) {
-        for (int i = 1; i < ist.getNumOperands(); i++) {
-          if (ist.getOperand(i) == I->getOperand(0)) return true; // this is a write-read
-        } 
+      // if LHS of instruction is read inside loop (RHS) // read-write
+      for (auto &bbl : L->blocks()) {
+        for (auto &ist : *bbl) {
+          for (int i = 0; i < ist.getNumOperands(); i++) {
+            Value* rhs_loop = ist.getOperand(i);
+            if (dyn_cast<Constant>(rhs_loop)) continue;
+            if (rhs_loop == lhs) {
+              LLVM_DEBUG(dbgs() << "READ-WRITE DEPENDENCE\n");
+              LLVM_DEBUG(dbgs() << *I << " read write dependent on loop " << L->getName() << " instruction " << ist << "\n");
+              LLVM_DEBUG(dbgs() << *lhs << " in the BB is dependent on " << *rhs_loop << " in the loop\n");
+              return true; // this is a read-write
+            }
+          } 
+        }
       }
     }
     return false;
@@ -1533,19 +1611,22 @@ private:
   bool attempt_to_move(std::vector<BasicBlock*> move_up,
                        std::vector<BasicBlock*> move_down,
                        int Num_bb,
-                       const FusionCandidate &FC0,
-                       const FusionCandidate &FC1) {
+                       FusionCandidate &FC0,
+                       FusionCandidate &FC1) {
 
     if (move_up.size() == Num_bb) {
       // all basic blocks can be moved up
+      LLVM_DEBUG(dbgs() << "==Moving up all the intervening BBs...\n");
       move_intervening_code_up(FC0, FC1);
     }
     else if (move_down.size() == Num_bb) {
       // all basic blocks can be moved down
+      LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
       move_intervening_code_down(FC0, FC1);
     }
     else {
       // basic blocks cannot be all move up nor down, unfusable
+      LLVM_DEBUG(dbgs() << "==Not Moving any intervening BBs.\n");
       return false;
     }
     
@@ -1553,19 +1634,24 @@ private:
 
   }
 
-  void move_intervening_code_up(const FusionCandidate &FC0,
-                                const FusionCandidate & FC1) {
+  void move_intervening_code_up(FusionCandidate & FC0,
+                                FusionCandidate & FC1) {
 
     FC0.Header->moveBefore(FC1.Header);
+    FC0.Preheader = FC1.Preheader;
+    FC1.Preheader = FC0.ExitingBlock;
+    FC0.ExitBlock = FC1.Header;
+    
     // still need to update phi nodes
    
   }
 
-  void move_intervening_code_down(const FusionCandidate &FC0,
-                                  const FusionCandidate & FC1) {
+  void move_intervening_code_down(FusionCandidate & FC0,
+                                  FusionCandidate & FC1) {
     
     FC1.Header->moveAfter(FC0.Header);
     // still need to update phi nodes
+    // TODO: change FC0 and FC1 as move_intervening_code_up
 
   }
   
