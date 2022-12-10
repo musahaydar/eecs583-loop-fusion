@@ -629,10 +629,10 @@ public:
       LLVM_DEBUG(dbgs() << "Function after Loop Fusion: \n"; F.dump(););
 
 #ifndef NDEBUG
-    assert(DT.verify());
-    assert(PDT.verify());
-    LI.verify(DT);
-    SE.verify();
+    // assert(DT.verify());
+    // assert(PDT.verify());
+    // LI.verify(DT);
+    // SE.verify();
 #endif
 
     LLVM_DEBUG(dbgs() << "Loop Fusion complete\n");
@@ -858,12 +858,14 @@ private:
 
       std::vector<FusionCandidate> CandidateVec(CandidateSet.begin(), CandidateSet.end());
       for (auto FC0 = CandidateVec.begin(); FC0 != CandidateVec.end(); ++FC0) {
-        assert(!LDT.isRemovedLoop(FC0->L) &&
-               "Should not have removed loops in CandidateSet!");
+        if (LDT.isRemovedLoop(FC0->L)) continue;
+        // assert(!LDT.isRemovedLoop(FC0->L) &&
+        //        "Should not have removed loops in CandidateSet!");
         auto FC1 = FC0;
         for (++FC1; FC1 != CandidateVec.end(); ++FC1) {
-          assert(!LDT.isRemovedLoop(FC1->L) &&
-                 "Should not have removed loops in CandidateSet!");
+          if (LDT.isRemovedLoop(FC1->L)) continue;
+          // assert(!LDT.isRemovedLoop(FC1->L) &&
+          //        "Should not have removed loops in CandidateSet!");
 
           LLVM_DEBUG(dbgs() << "Attempting to fuse candidate \n"; FC0->dump();
                      dbgs() << " with\n"; FC1->dump(); dbgs() << "\n");
@@ -917,6 +919,10 @@ private:
               continue;
             }
           }
+
+          // LLVM_DEBUG(dbgs()
+          //               << "=== Debugging: terminating here to print out CFG after MIC.\n");
+          // return false;
           
 
           if (!FC0->GuardBranch && FC1->GuardBranch) {
@@ -1637,11 +1643,55 @@ private:
   void move_intervening_code_up(FusionCandidate & FC0,
                                 FusionCandidate & FC1) {
 
-    FC0.Header->moveBefore(FC1.Header);
+    // LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
+    
+    // FC0.Header->removeFromParent();
+    Instruction* terminator = FC0.Preheader->getTerminator();
+    FC0.Preheader->replaceSuccessorsPhiUsesWith(FC1.Preheader);
+    terminator->setSuccessor(0, FC0.ExitBlock);
+    terminator = FC1.Preheader->getTerminator();
+    FC1.Preheader->replaceSuccessorsPhiUsesWith(FC0.Header);
+    terminator->setSuccessor(0, FC0.Header);
+    terminator = FC0.Header->getTerminator();
+    terminator->setSuccessor(1, FC1.Header);
+
+    // FC0.Header->moveBefore(FC1.Header);
+    // Update Dominator Tree
+    DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    // DT.viewGraph();
+    SmallVector<DominatorTree::UpdateType, 8> TreeUpdates;
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Preheader, FC0.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Header, FC0.ExitBlock));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Preheader, FC1.Header));
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Preheader, FC0.ExitBlock));
+    
+    LLVM_DEBUG(dbgs() << "FC0 before MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 before MIC update: \n"; FC1.dump(););
+
     FC0.Preheader = FC1.Preheader;
     FC1.Preheader = FC0.ExitingBlock;
     FC0.ExitBlock = FC1.Header;
+
+    LLVM_DEBUG(dbgs() << "FC0 after MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 after MIC update: \n"; FC1.dump(););
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Preheader, FC0.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Preheader, FC1.Header));
+
+
+    DTU.applyUpdates(TreeUpdates);
+    DT.viewGraph();
     
+    // DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    // example: DTU(DT, PDT, DomTreeUpdater::UpdateStrategy::Lazy)
+    // TODO
+   // example: TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Latch, FC0.Header));
+    // TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Latch, FC0.Header));
+    // DTU.applyUpdates()
+    
+    // FC0.DT.applyUpdates();
+    // FC1.DT.applyUpdates();
     // still need to update phi nodes
    
   }
@@ -1650,8 +1700,16 @@ private:
                                   FusionCandidate & FC1) {
     
     FC1.Header->moveAfter(FC0.Header);
+    
+    FC1.Preheader = FC0.ExitBlock;
+    FC0.ExitBlock = FC1.Header;
+    FC1.ExitBlock = FC0.ExitBlock;
+
+    // FC0.DT.applyUpdates();
+    // FC1.DT.applyUpdates();
+    // FC0.DT.changeImmediateDominator()
+
     // still need to update phi nodes
-    // TODO: change FC0 and FC1 as move_intervening_code_up
 
   }
   

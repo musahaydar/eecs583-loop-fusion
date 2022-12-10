@@ -191,3 +191,19 @@ InstrDep
         return true
     return false    
 }
+
+initialize move up vector
+initialize move down vector
+For each intervening BB:
+    if !dependent(BB, FC0): 
+        add BB to move up
+    elif !dependent(BB, FC1):
+        add BB to move down
+    else:
+        "Cannot be fused"
+if move_up contains every intervening BB:
+    move intervening code up
+elif move_down contains every intervening BB:
+    move intervening code down
+else:
+    "Cannot be fused"
