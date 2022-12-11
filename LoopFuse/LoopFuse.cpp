@@ -870,6 +870,10 @@ private:
           LLVM_DEBUG(dbgs() << "Attempting to fuse candidate \n"; FC0->dump();
                      dbgs() << " with\n"; FC1->dump(); dbgs() << "\n");
 
+          LLVM_DEBUG(dbgs() << "Printing FC1.Preheader \n");
+          for (auto &ist : *FC1->Preheader) {
+            LLVM_DEBUG(dbgs() << ist << '\n');
+          }
           FC0->verify();
           FC1->verify();
 
@@ -1645,15 +1649,45 @@ private:
 
     // LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
     
+    BasicBlock *new_bbl = BasicBlock::Create(FC1.Header->getContext(), "fc1.preheader", FC1.Header->getParent(), FC1.Header->getNextNode());
+  
+    //  // Save DebugLoc of split point before invalidating iterator
+    // auto I = FC1.Header->begin();
+    // DebugLoc Loc = I->getDebugLoc();
+    //  // Move all of the specified instructions from the original basic block into
+    //  // the new basic block.
+    //  New->splice(New->end(), this, I, end());
+  
+   // Add a branch instruction to the newly formed basic block.
+    BranchInst *BI = BranchInst::Create(FC1.Header, new_bbl);
+    /// BI->setDebugLoc(Loc);
+    FC1.Preheader->replaceSuccessorsPhiUsesWith(new_bbl);
+    LLVM_DEBUG(dbgs() << "===Newly created block after splitBasicBlock \n");
+    for (auto &ist : *new_bbl) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    LLVM_DEBUG(dbgs() << "===FC1.Header \n");
+    for (auto &ist : *FC1.Header) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    // auto fc1_header_itr = FC1.Header->begin();
+    // auto new_bbl = FC1.Header->splitBasicBlock(fc1_header_itr, "fc1.preheader", true);
+    // LLVM_DEBUG(dbgs() << "Newly created block after splitBasicBlock \n");
+    // for (auto &ist : *new_bbl) {
+    //   LLVM_DEBUG(dbgs() << ist << "\n");
+    // }
     // FC0.Header->removeFromParent();
     Instruction* terminator = FC0.Preheader->getTerminator();
     FC0.Preheader->replaceSuccessorsPhiUsesWith(FC1.Preheader);
     terminator->setSuccessor(0, FC0.ExitBlock);
+
     terminator = FC1.Preheader->getTerminator();
-    FC1.Preheader->replaceSuccessorsPhiUsesWith(FC0.Header);
+    // FC1.Preheader->replaceSuccessorsPhiUsesWith(FC0.Header);
     terminator->setSuccessor(0, FC0.Header);
+    
     terminator = FC0.Header->getTerminator();
-    terminator->setSuccessor(1, FC1.Header);
+    terminator->setSuccessor(1, new_bbl);
+
 
     // FC0.Header->moveBefore(FC1.Header);
     // Update Dominator Tree
@@ -1670,15 +1704,18 @@ private:
     LLVM_DEBUG(dbgs() << "FC1 before MIC update: \n"; FC1.dump(););
 
     FC0.Preheader = FC1.Preheader;
-    FC1.Preheader = FC0.ExitingBlock;
-    FC0.ExitBlock = FC1.Header;
+    FC1.Preheader = FC0.ExitingBlock; 
+    FC0.ExitBlock = FC1.Header; 
 
     LLVM_DEBUG(dbgs() << "FC0 after MIC update: \n"; FC0.dump(););
     LLVM_DEBUG(dbgs() << "FC1 after MIC update: \n"; FC1.dump(););
 
     TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Preheader, FC0.Header));
-    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Preheader, FC1.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Preheader, new_bbl));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, new_bbl, FC1.Header));
 
+    FC1.Preheader = new_bbl;
+    FC0.ExitBlock = new_bbl;
 
     DTU.applyUpdates(TreeUpdates);
     DT.viewGraph();
@@ -1857,10 +1894,14 @@ private:
     if (FC0.GuardBranch)
       return fuseGuardedLoops(FC0, FC1);
 
-    assert(FC1.Preheader ==
-           (FC0.Peeled ? FC0.ExitBlock->getUniqueSuccessor() : FC0.ExitBlock));
-    assert(FC1.Preheader->size() == 1 &&
-           FC1.Preheader->getSingleSuccessor() == FC1.Header);
+    // LLVM_DEBUG(dbgs() << "FC1.Preheader size: " << FC1.Preheader->size() << '\n');
+    // // LLVM_DEBUG(dbgs() << "FC1.Preheader num successors " << FC1.Preheader->getTerminator()->getNumSuccessors() << '\n');
+    // LLVM_DEBUG(dbgs() << "FC1.Preheader successor " << FC1.Preheader->getSingleSuccessor()->getName() << " FC1.Header: " << FC1.Header->getName() << '\n');
+    // assert(FC1.Preheader ==
+    //        (FC0.Peeled ? FC0.ExitBlock->getUniqueSuccessor() : FC0.ExitBlock));
+    // assert(FC1.Preheader->size() == 1 &&
+    //        FC1.Preheader->getSingleSuccessor() == FC1.Header);
+    
 
     // Remember the phi nodes originally in the header of FC0 in order to rewire
     // them later. However, this is only necessary if the new loop carried
@@ -1923,11 +1964,13 @@ private:
     }
 
     // The pre-header of L1 is not necessary anymore.
-    assert(pred_empty(FC1.Preheader));
-    FC1.Preheader->getTerminator()->eraseFromParent();
-    new UnreachableInst(FC1.Preheader->getContext(), FC1.Preheader);
-    TreeUpdates.emplace_back(DominatorTree::UpdateType(
-        DominatorTree::Delete, FC1.Preheader, FC1.Header));
+    // assert(pred_empty(FC1.Preheader));
+    if (pred_empty(FC1.Preheader)) {
+      FC1.Preheader->getTerminator()->eraseFromParent();
+      new UnreachableInst(FC1.Preheader->getContext(), FC1.Preheader);
+      TreeUpdates.emplace_back(DominatorTree::UpdateType(
+          DominatorTree::Delete, FC1.Preheader, FC1.Header));
+    }
 
     // Moves the phi nodes from the second to the first loops header block.
     while (PHINode *PHI = dyn_cast<PHINode>(&FC1.Header->front())) {
