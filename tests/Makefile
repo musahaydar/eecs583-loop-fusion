@@ -8,8 +8,8 @@
 no-opt:
 	clang -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
 	opt -enable-new-pm=0 -loop-simplify -mem2reg -loop-rotate -o no-opt.bc < no-opt.bc
-	opt -enable-new-pm=0 -instcombine -o no-opt.bc < no-opt.bc
-	opt -enable-new-pm=0 -o no-opt.bc -load ../build/RemoveEmptyBBs/REMOVE_EMPTY_BBS.so -remove-empty-bbs -debug < no-opt.bc
+	opt -enable-new-pm=0 -instcombine -simplifycfg -o no-opt.bc < no-opt.bc
+	# opt -enable-new-pm=0 -o no-opt.bc -load ../build/RemoveEmptyBBs/REMOVE_EMPTY_BBS.so -remove-empty-bbs -debug < no-opt.bc
 
 # no-opt-cpp:
 # 	clang++ -O -Xclang -disable-llvm-passes -emit-llvm $(test) -c -o no-opt.bc
@@ -36,12 +36,12 @@ loop-fuse:
 loop-fuse-debug:
 	$(MAKE) clean-test
 	$(MAKE) no-opt
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuse/LOOP_FUSION.so -debug -loop-fusion-583 -loop-fusion-583-verbose-debug < no-opt.bc
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuse/LOOP_FUSION.so -debug -loop-fusion-583 -loop-fusion-583-verbose-debug  < no-opt.bc
 
 loop-fuse-stable-debug:
 	$(MAKE) clean-test
 	$(MAKE) no-opt
-	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseStable/LOOP_FUSION.so -debug -loop-fusion-583  < no-opt.bc
+	opt -enable-new-pm=0 -o fused.bc -load ../build/LoopFuseStable/LOOP_FUSION.so -debug -loop-fusion-583  -loop-fusion-583-verbose-debug  < no-opt.bc
 
 trip-count:
 	$(MAKE) no-opt
