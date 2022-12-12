@@ -1718,6 +1718,7 @@ private:
     FC0.ExitBlock = new_bbl;
 
     DTU.applyUpdates(TreeUpdates);
+    DTU.flush();
     DT.viewGraph();
     
     // DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
@@ -1735,18 +1736,93 @@ private:
 
   void move_intervening_code_down(FusionCandidate & FC0,
                                   FusionCandidate & FC1) {
+  
+
+    // LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
     
-    FC1.Header->moveAfter(FC0.Header);
+    BasicBlock *new_bbl = BasicBlock::Create(FC1.Header->getContext(), "fc1.preheader", FC1.Header->getParent(), FC1.Header->getNextNode());
+  
+  
+   // Add a branch instruction to the newly formed basic block.
+    BranchInst *BI = BranchInst::Create(FC1.Header, new_bbl);
+    /// BI->setDebugLoc(Loc);
+    FC1.Preheader->replaceSuccessorsPhiUsesWith(new_bbl);
+    LLVM_DEBUG(dbgs() << "===Newly created block after splitBasicBlock \n");
+    for (auto &ist : *new_bbl) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    LLVM_DEBUG(dbgs() << "===FC1.Header \n");
+    for (auto &ist : *FC1.Header) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    // auto fc1_header_itr = FC1.Header->begin();
+    // auto new_bbl = FC1.Header->splitBasicBlock(fc1_header_itr, "fc1.preheader", true);
+    // LLVM_DEBUG(dbgs() << "Newly created block after splitBasicBlock \n");
+    // for (auto &ist : *new_bbl) {
+    //   LLVM_DEBUG(dbgs() << ist << "\n");
+    // }
+    // FC0.Header->removeFromParent();
+    Instruction* terminator = FC1.Header->getTerminator();
+    // FC0.Preheader->replaceSuccessorsPhiUsesWith(FC1.Preheader);
+    terminator->setSuccessor(1, FC0.ExitBlock);
+
+    terminator = FC1.Preheader->getTerminator();
+    // FC1.Preheader->replaceSuccessorsPhiUsesWith(FC0.Header);
+    terminator->setSuccessor(0, FC1.ExitBlock);
     
-    FC1.Preheader = FC0.ExitBlock;
-    FC0.ExitBlock = FC1.Header;
+    terminator = FC0.Header->getTerminator();
+    terminator->setSuccessor(1, new_bbl);
+
+
+    // FC0.Header->moveBefore(FC1.Header);
+    // Update Dominator Tree
+    DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    // DT.viewGraph();
+    SmallVector<DominatorTree::UpdateType, 8> TreeUpdates;
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Header, FC0.ExitBlock));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Preheader, FC1.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Header, FC1.ExitBlock));
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Header, new_bbl));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, new_bbl, FC1.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Header, FC0.ExitBlock));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Preheader, FC1.ExitBlock));
+
+    
+    LLVM_DEBUG(dbgs() << "FC0 before MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 before MIC update: \n"; FC1.dump(););
+
     FC1.ExitBlock = FC0.ExitBlock;
+    FC1.Preheader = new_bbl;
+    FC0.ExitBlock = new_bbl;
 
-    // FC0.DT.applyUpdates();
-    // FC1.DT.applyUpdates();
-    // FC0.DT.changeImmediateDominator()
 
-    // still need to update phi nodes
+    LLVM_DEBUG(dbgs() << "FC0 after MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 after MIC update: \n"; FC1.dump(););
+
+
+    new_bbl = BasicBlock::Create(FC1.ExitBlock->getContext(), "fc1.exitbb", FC1.ExitBlock->getParent(), FC1.ExitBlock->getNextNode());
+  
+  
+   // Add a branch instruction to the newly formed basic block.
+    BI = BranchInst::Create(FC1.ExitBlock, new_bbl);
+
+    terminator = FC1.Header->getTerminator();
+    terminator->setSuccessor(1, new_bbl);
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Header, FC1.ExitBlock));
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Header, new_bbl));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, new_bbl, FC1.ExitBlock));
+
+    FC1.ExitBlock = new_bbl;
+
+
+
+    DTU.applyUpdates(TreeUpdates);
+    DTU.flush();
+    DT.viewGraph();
+    
 
   }
   

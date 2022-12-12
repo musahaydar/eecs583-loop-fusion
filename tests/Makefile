@@ -55,6 +55,13 @@ compare:
 	./test_fused > res_fused
 	diff res_no_opt res_fused
 
+compare_scanf:
+	clang no-opt.bc -o test_no_opt
+	clang fused.bc -o test_fused
+	./test_no_opt < input.txt > res_no_opt
+	./test_fused < input.txt > res_fused
+	diff res_no_opt res_fused
+
 # generate graphs after running fusion on a test
 viz:
 	./viz.sh no-opt.bc
