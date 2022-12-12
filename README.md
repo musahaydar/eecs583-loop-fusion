@@ -1,5 +1,7 @@
 # Loop Fusion Pass
 
+This repository contains an extension to the LLVM Loop Fusion pass which attempts to move any intervening code between the loops either above the first loop or below the second loop.
+
 ## Legacy Pass
 
 ### Building The Pass
