@@ -1,3 +1,4 @@
+// example of moving down intervening code
 #include <stdio.h>
 
 int main() {
@@ -12,6 +13,10 @@ int main() {
         x = x + i;
     }
 
+
+    if (z) {
+        z = x * 5;
+    }
     for (int j = 0; j < 5; ++j) {
         y = y * (1 + j);
     }

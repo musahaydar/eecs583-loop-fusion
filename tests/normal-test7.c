@@ -1,3 +1,4 @@
+// example of moving up intervening code
 #include <stdio.h>
 
 int main() {
@@ -8,12 +9,16 @@ int main() {
 
     scanf("%d", &z);
     // these two loops should be merged
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 1000000000; ++i) {
         x = x + i;
     }
 
-    for (int j = 0; j < 5; ++j) {
-        y = y * (1 + j);
+    y = z;
+    if (z) {
+        z = y * 5;
+    }
+    for (int j = 0; j < 1000000000; ++j) {
+        y = y + (1 + j);
     }
 
     // printing

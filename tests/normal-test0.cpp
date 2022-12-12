@@ -1,7 +1,13 @@
 #include <iostream>
 using namespace std;
 
+void loops();
+
 int main() {
+    loops();
+}
+
+void loops() {
     int x = 1;
     int y = 1;
 

@@ -12,6 +12,10 @@ int main() {
         x = x + i;
     }
 
+    y = z;
+    if (z) {
+        z = x + y;
+    }
     for (int j = 0; j < 5; ++j) {
         y = y * (1 + j);
     }

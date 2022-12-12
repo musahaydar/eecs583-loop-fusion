@@ -43,6 +43,10 @@
 /// the conditions for fusion are discussed in more detail in the document
 /// above. These can be added to the current implementation in the future.
 //===----------------------------------------------------------------------===//
+// 3 libraries added by Julia
+#include <vector>
+#include <map>
+#include <algorithm>
 
 #include "LoopFuse.h"
 
@@ -345,7 +349,7 @@ struct FusionCandidate {
     }
     else {
       auto tc_value = dyn_cast<SCEVConstant>(trip_count);
-       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << tc_value <<"\n");
+       LLVM_DEBUG(dbgs() << "Loop trip count for " << L->getName() << " is " << *tc_value <<"\n");
     }
 
     // Require ScalarEvolution to be able to determine a trip count.
@@ -625,10 +629,10 @@ public:
       LLVM_DEBUG(dbgs() << "Function after Loop Fusion: \n"; F.dump(););
 
 #ifndef NDEBUG
-    assert(DT.verify());
-    assert(PDT.verify());
-    LI.verify(DT);
-    SE.verify();
+    // assert(DT.verify());
+    // assert(PDT.verify());
+    // LI.verify(DT);
+    // SE.verify();
 #endif
 
     LLVM_DEBUG(dbgs() << "Loop Fusion complete\n");
@@ -852,17 +856,24 @@ private:
       LLVM_DEBUG(dbgs() << "Attempting fusion on Candidate Set:\n"
                         << CandidateSet << "\n");
 
-      for (auto FC0 = CandidateSet.begin(); FC0 != CandidateSet.end(); ++FC0) {
-        assert(!LDT.isRemovedLoop(FC0->L) &&
-               "Should not have removed loops in CandidateSet!");
+      std::vector<FusionCandidate> CandidateVec(CandidateSet.begin(), CandidateSet.end());
+      for (auto FC0 = CandidateVec.begin(); FC0 != CandidateVec.end(); ++FC0) {
+        if (LDT.isRemovedLoop(FC0->L)) continue;
+        // assert(!LDT.isRemovedLoop(FC0->L) &&
+        //        "Should not have removed loops in CandidateSet!");
         auto FC1 = FC0;
-        for (++FC1; FC1 != CandidateSet.end(); ++FC1) {
-          assert(!LDT.isRemovedLoop(FC1->L) &&
-                 "Should not have removed loops in CandidateSet!");
+        for (++FC1; FC1 != CandidateVec.end(); ++FC1) {
+          if (LDT.isRemovedLoop(FC1->L)) continue;
+          // assert(!LDT.isRemovedLoop(FC1->L) &&
+          //        "Should not have removed loops in CandidateSet!");
 
           LLVM_DEBUG(dbgs() << "Attempting to fuse candidate \n"; FC0->dump();
                      dbgs() << " with\n"; FC1->dump(); dbgs() << "\n");
 
+          LLVM_DEBUG(dbgs() << "Printing FC1.Preheader \n");
+          for (auto &ist : *FC1->Preheader) {
+            LLVM_DEBUG(dbgs() << ist << '\n');
+          }
           FC0->verify();
           FC1->verify();
 
@@ -898,13 +909,25 @@ private:
                                                        NonEqualTripCount);
             continue;
           }
+          // auto FC00 = CandidateSet.erase(FC0, FC0);
+          // auto FC11 = CandidateSet.erase(FC1, FC1);
+          
 
+          //FusionCandidate FC_tmp0 = *FC0;
+          //FusionCandidate FC_tmp1 = *FC1;
           if (!isAdjacent(*FC0, *FC1)) {
-            LLVM_DEBUG(dbgs()
-                       << "Fusion candidates are not adjacent. Not fusing.\n");
-            reportLoopFusion<OptimizationRemarkMissed>(*FC0, *FC1, NonAdjacent);
-            continue;
+            if(!attempt_MIC(*FC0, *FC1)) {
+              LLVM_DEBUG(dbgs()
+                        << "Fusion candidates are not adjacent and not movable. Not fusing.\n");
+              reportLoopFusion<OptimizationRemarkMissed>(*FC0, *FC1, NonAdjacent);
+              continue;
+            }
           }
+
+          // LLVM_DEBUG(dbgs()
+          //               << "=== Debugging: terminating here to print out CFG after MIC.\n");
+          // return false;
+          
 
           if (!FC0->GuardBranch && FC1->GuardBranch) {
             LLVM_DEBUG(dbgs() << "The second candidate is guarded while the "
@@ -1028,21 +1051,23 @@ private:
           // Notify the loop-depth-tree that these loops are not valid objects
           LDT.removeLoop(FC1->L);
 
-          CandidateSet.erase(FC0);
-          CandidateSet.erase(FC1);
+          // TODO: currently commented out to test simple test case
 
-          auto InsertPos = CandidateSet.insert(FusedCand);
+          // CandidateVec.erase(FC0);
+          // CandidateVec.erase(FC1);
 
-          assert(InsertPos.second &&
-                 "Unable to insert TargetCandidate in CandidateSet!");
+          // CandidateVec.push_back(FusedCand);
+
+          // assert(InsertPos.second &&
+          //        "Unable to insert TargetCandidate in CandidateSet!");
 
           // Reset FC0 and FC1 the new (fused) candidate. Subsequent iterations
           // of the FC1 loop will attempt to fuse the new (fused) loop with the
           // remaining candidates in the current candidate set.
-          FC0 = FC1 = InsertPos.first;
+          // FC0 = FC1 = CandidateVec.end()-1;
 
-          LLVM_DEBUG(dbgs() << "Candidate Set (after fusion): " << CandidateSet
-                            << "\n");
+          // LLVM_DEBUG(dbgs() << "Candidate Set (after fusion): " << CandidateVec
+          //                   << "\n");
 
           Fused = true;
         }
@@ -1414,8 +1439,8 @@ private:
   /// FC1. If not, then the loops are not adjacent. If the two candidates are
   /// not guarded loops, then it checks whether the exit block of \p FC0 is the
   /// preheader of \p FC1.
-  bool isAdjacent(const FusionCandidate &FC0,
-                  const FusionCandidate &FC1) const {
+  bool isAdjacent(FusionCandidate &FC0,
+                  FusionCandidate &FC1)  {
     // If the successor of the guard branch is FC1, then the loops are adjacent
     if (FC0.GuardBranch) {
       return FC0.getNonLoopBlock() == FC1.getEntryBlock();
@@ -1426,6 +1451,381 @@ private:
       return FC0.ExitBlock == FC1.getEntryBlock();
     }
   }
+  
+  bool attempt_MIC(FusionCandidate & FC0,
+                   FusionCandidate & FC1) {
+    
+    std::vector<BasicBlock*> move_up = {};
+    std::vector<BasicBlock*> move_down = {};
+    std::queue<BasicBlock*> MIC_bb;
+    int Num_bb = 0;
+    
+    // Start with the first intervening block
+    MIC_bb.push(FC0.ExitBlock);
+    while(!MIC_bb.empty()) {
+
+      // Remove basic block that we're working with from queue and increment # of basic blocks
+      BasicBlock* curr_bb = MIC_bb.front();
+      MIC_bb.pop();
+      ++Num_bb;
+      
+      bool movable = false;
+      if (!BB_dependent_on_loop(curr_bb, FC0)) {
+        // Not dependent on first loop, potentially move up
+        LLVM_DEBUG(dbgs() << curr_bb->getName() << " is not dependent on the first loop \n");
+        move_up.push_back(curr_bb);
+        movable = true;
+      }
+      if (!BB_dependent_on_loop(curr_bb, FC1)) {
+        // Not dependent on second loop, potentially move down
+        LLVM_DEBUG(dbgs() << curr_bb->getName() << " is not dependent on the second loop \n");
+        move_down.push_back(curr_bb);
+        movable = true;
+      }
+      if (!movable) {
+        // Dependent on both loops, can't be fused
+        LLVM_DEBUG(dbgs() << curr_bb->getName() << " is dependent on both loops \n");
+        return false;
+      }
+
+      // Get more intervening code
+      Instruction *terminator = curr_bb->getTerminator();
+      unsigned int num_succ = terminator->getNumSuccessors();
+      for (unsigned int i=0; i<num_succ; i++) {
+        BasicBlock *succ = terminator->getSuccessor(i);
+        if (succ != FC1.Preheader) {
+          MIC_bb.push(succ);
+        }
+      }
+
+    }
+    
+    // Attempt to move intervening code
+    return attempt_to_move(move_up, move_down, Num_bb, FC0, FC1);
+
+  }
+
+  bool BB_dependent_on_loop(BasicBlock* BB,
+                            const FusionCandidate &FC) {
+      
+      // Check if a Basic block is dependent on a loop
+      
+      for (auto &Instr: *BB) {
+        if (Instr_dependent_on_loop(&Instr, FC.L)) {
+          // Instruction is dependent on loop
+          return true;
+        }
+      }
+
+      // No instruction is dependent on the loop
+      return false;
+  }
+
+  bool Instr_dependent_on_loop(Instruction * I, Loop * L) {
+    /* check if an instruction I is depenedent on a certain Loop L */
+
+    // if RHS of instruction is updated inside loop (LHS) // write-read
+    for (int i = 0; i < I->getNumOperands(); i++) {
+      Value* rhs = I->getOperand(i);
+      if (dyn_cast<Constant>(rhs)) continue;
+      for (auto &bbl : L->blocks()) {
+        for (auto &ist : *bbl) {
+          if (!ist.getType()->isVoidTy()) {
+              Value* lhs_loop = &llvm::cast<Value>(ist);
+              if (lhs_loop == rhs) {
+                LLVM_DEBUG(dbgs() << "WRITE-READ DEPENDENCE\n");
+              LLVM_DEBUG(dbgs() << *I << " write-read dependent on loop " << L->getName() << " instuction " << ist << "\n");
+              LLVM_DEBUG(dbgs() << *rhs << " in the BB is dependent on " << *lhs_loop << " in the loop\n");
+              return true; // this is a write-read
+            }
+          }
+          // if is a phi node, then all rhs must also be considered
+          if (isa<PHINode>(ist)) {
+            PHINode* ist_phi = dyn_cast<PHINode>(&ist);
+            for (int j=0; j<ist_phi->getNumIncomingValues(); j++) {
+              Value* rhs_phi = ist_phi->getIncomingValue(j);
+              if (dyn_cast<Constant>(rhs_phi)) continue;
+              if (rhs_phi == rhs) {
+                LLVM_DEBUG(dbgs() << "WRITE-READ DEPENDENCE (PHI-Node) \n");
+                LLVM_DEBUG(dbgs() << *I << " write-read dependent on loop " << L->getName() << " instuction " << ist << "\n");
+                rhs->printAsOperand(dbgs());
+                dbgs() << "\n";
+                rhs_phi->printAsOperand(dbgs());
+                dbgs() << "\n";
+                // LLVM_DEBUG(dbgs() << *rhs << " in the BB is dependent on " << *rhs_phi << " in the loop\n");
+                return true; // this is a write-read
+              }
+            }
+          }
+        }
+      } 
+    }
+    
+
+    // if there exists LHS
+    if (!I->getType()->isVoidTy()) {
+      // if LHS of instruction is updated inside loop (LHS) // write-write
+      Value* lhs = llvm::cast<Value>(I);
+      for (auto &bbl : L->blocks()) {
+        for (auto &ist : *bbl) {
+          if (!ist.getType()->isVoidTy()) {
+            Value* lhs_loop = &llvm::cast<Value>(ist);
+            if (lhs_loop == lhs) {
+              LLVM_DEBUG(dbgs() << "WRITE-WRITE DEPENDENCE\n");
+              LLVM_DEBUG(dbgs() << *I << " write-write dependent on loop " << L->getName() << " instruction " << ist << "\n");
+              LLVM_DEBUG(dbgs() << *lhs << " in the BB is dependent on " << *lhs_loop << " in the loop\n");
+              return true; // this is a write-write
+            }
+          }
+          // if is a phi node, then all rhs must also be considered
+          if (isa<PHINode>(ist)) {
+            PHINode* ist_phi = dyn_cast<PHINode>(&ist);
+            for (int j=0; j<ist_phi->getNumIncomingValues(); j++) {
+              Value* rhs_phi = ist_phi->getIncomingValue(j);
+              if (dyn_cast<Constant>(rhs_phi)) continue;
+              if (rhs_phi == lhs) {
+                LLVM_DEBUG(dbgs() << "WRITE-WRITE DEPENDENCE (PHI-Node) \n");
+                LLVM_DEBUG(dbgs() << *I << " write-write dependent on loop " << L->getName() << " instuction " << ist << "\n");
+                lhs->printAsOperand(dbgs());
+                dbgs() << "\n";
+                rhs_phi->printAsOperand(dbgs());
+                dbgs() << "\n";
+                // LLVM_DEBUG(dbgs() << *rhs << " in the BB is dependent on " << *rhs_phi << " in the loop\n");
+                return true; // this is a write-read
+              }
+            }
+          }
+        }
+      }
+    
+
+      // if LHS of instruction is read inside loop (RHS) // read-write
+      for (auto &bbl : L->blocks()) {
+        for (auto &ist : *bbl) {
+          for (int i = 0; i < ist.getNumOperands(); i++) {
+            Value* rhs_loop = ist.getOperand(i);
+            if (dyn_cast<Constant>(rhs_loop)) continue;
+            if (rhs_loop == lhs) {
+              LLVM_DEBUG(dbgs() << "READ-WRITE DEPENDENCE\n");
+              LLVM_DEBUG(dbgs() << *I << " read write dependent on loop " << L->getName() << " instruction " << ist << "\n");
+              LLVM_DEBUG(dbgs() << *lhs << " in the BB is dependent on " << *rhs_loop << " in the loop\n");
+              return true; // this is a read-write
+            }
+          } 
+        }
+      }
+    }
+    return false;
+  }
+
+  bool attempt_to_move(std::vector<BasicBlock*> move_up,
+                       std::vector<BasicBlock*> move_down,
+                       int Num_bb,
+                       FusionCandidate &FC0,
+                       FusionCandidate &FC1) {
+
+    if (move_up.size() == Num_bb) {
+      // all basic blocks can be moved up
+      LLVM_DEBUG(dbgs() << "==Moving up all the intervening BBs...\n");
+      move_intervening_code_up(FC0, FC1);
+    }
+    else if (move_down.size() == Num_bb) {
+      // all basic blocks can be moved down
+      LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
+      move_intervening_code_down(FC0, FC1);
+    }
+    else {
+      // basic blocks cannot be all move up nor down, unfusable
+      LLVM_DEBUG(dbgs() << "==Not Moving any intervening BBs.\n");
+      return false;
+    }
+    
+    return true;
+
+  }
+
+  void move_intervening_code_up(FusionCandidate & FC0,
+                                FusionCandidate & FC1) {
+
+    // LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
+    
+    BasicBlock *new_bbl = BasicBlock::Create(FC1.Header->getContext(), "fc1.preheader", FC1.Header->getParent(), FC1.Header->getNextNode());
+  
+    //  // Save DebugLoc of split point before invalidating iterator
+    // auto I = FC1.Header->begin();
+    // DebugLoc Loc = I->getDebugLoc();
+    //  // Move all of the specified instructions from the original basic block into
+    //  // the new basic block.
+    //  New->splice(New->end(), this, I, end());
+  
+   // Add a branch instruction to the newly formed basic block.
+    BranchInst *BI = BranchInst::Create(FC1.Header, new_bbl);
+    /// BI->setDebugLoc(Loc);
+    FC1.Preheader->replaceSuccessorsPhiUsesWith(new_bbl);
+    LLVM_DEBUG(dbgs() << "===Newly created block after splitBasicBlock \n");
+    for (auto &ist : *new_bbl) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    LLVM_DEBUG(dbgs() << "===FC1.Header \n");
+    for (auto &ist : *FC1.Header) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    // auto fc1_header_itr = FC1.Header->begin();
+    // auto new_bbl = FC1.Header->splitBasicBlock(fc1_header_itr, "fc1.preheader", true);
+    // LLVM_DEBUG(dbgs() << "Newly created block after splitBasicBlock \n");
+    // for (auto &ist : *new_bbl) {
+    //   LLVM_DEBUG(dbgs() << ist << "\n");
+    // }
+    // FC0.Header->removeFromParent();
+    Instruction* terminator = FC0.Preheader->getTerminator();
+    FC0.Preheader->replaceSuccessorsPhiUsesWith(FC1.Preheader);
+    terminator->setSuccessor(0, FC0.ExitBlock);
+
+    terminator = FC1.Preheader->getTerminator();
+    // FC1.Preheader->replaceSuccessorsPhiUsesWith(FC0.Header);
+    terminator->setSuccessor(0, FC0.Header);
+    
+    terminator = FC0.Header->getTerminator();
+    terminator->setSuccessor(1, new_bbl);
+
+
+    // FC0.Header->moveBefore(FC1.Header);
+    // Update Dominator Tree
+    DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    // DT.viewGraph();
+    SmallVector<DominatorTree::UpdateType, 8> TreeUpdates;
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Preheader, FC0.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Header, FC0.ExitBlock));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Preheader, FC1.Header));
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Preheader, FC0.ExitBlock));
+    
+    LLVM_DEBUG(dbgs() << "FC0 before MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 before MIC update: \n"; FC1.dump(););
+
+    FC0.Preheader = FC1.Preheader;
+    FC1.Preheader = FC0.ExitingBlock; 
+    FC0.ExitBlock = FC1.Header; 
+
+    LLVM_DEBUG(dbgs() << "FC0 after MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 after MIC update: \n"; FC1.dump(););
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Preheader, FC0.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Preheader, new_bbl));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, new_bbl, FC1.Header));
+
+    FC1.Preheader = new_bbl;
+    FC0.ExitBlock = new_bbl;
+
+    DTU.applyUpdates(TreeUpdates);
+    DTU.flush();
+    DT.viewGraph();
+    
+    // DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    // example: DTU(DT, PDT, DomTreeUpdater::UpdateStrategy::Lazy)
+    // TODO
+   // example: TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Latch, FC0.Header));
+    // TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Latch, FC0.Header));
+    // DTU.applyUpdates()
+    
+    // FC0.DT.applyUpdates();
+    // FC1.DT.applyUpdates();
+    // still need to update phi nodes
+   
+  }
+
+  void move_intervening_code_down(FusionCandidate & FC0,
+                                  FusionCandidate & FC1) {
+  
+
+    // LLVM_DEBUG(dbgs() << "==Moving down all the intervening BBs...\n");
+    
+    BasicBlock *new_bbl = BasicBlock::Create(FC1.Header->getContext(), "fc1.preheader", FC1.Header->getParent(), FC1.Header->getNextNode());
+  
+  
+   // Add a branch instruction to the newly formed basic block.
+    BranchInst *BI = BranchInst::Create(FC1.Header, new_bbl);
+    /// BI->setDebugLoc(Loc);
+    FC1.Preheader->replaceSuccessorsPhiUsesWith(new_bbl);
+    LLVM_DEBUG(dbgs() << "===Newly created block after splitBasicBlock \n");
+    for (auto &ist : *new_bbl) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    LLVM_DEBUG(dbgs() << "===FC1.Header \n");
+    for (auto &ist : *FC1.Header) {
+      LLVM_DEBUG(dbgs() << ist << "\n");
+    }
+    // auto fc1_header_itr = FC1.Header->begin();
+    // auto new_bbl = FC1.Header->splitBasicBlock(fc1_header_itr, "fc1.preheader", true);
+    // LLVM_DEBUG(dbgs() << "Newly created block after splitBasicBlock \n");
+    // for (auto &ist : *new_bbl) {
+    //   LLVM_DEBUG(dbgs() << ist << "\n");
+    // }
+    // FC0.Header->removeFromParent();
+    Instruction* terminator = FC1.Header->getTerminator();
+    // FC0.Preheader->replaceSuccessorsPhiUsesWith(FC1.Preheader);
+    terminator->setSuccessor(1, FC0.ExitBlock);
+
+    terminator = FC1.Preheader->getTerminator();
+    // FC1.Preheader->replaceSuccessorsPhiUsesWith(FC0.Header);
+    terminator->setSuccessor(0, FC1.ExitBlock);
+    
+    terminator = FC0.Header->getTerminator();
+    terminator->setSuccessor(1, new_bbl);
+
+
+    // FC0.Header->moveBefore(FC1.Header);
+    // Update Dominator Tree
+    DomTreeUpdater DTU(FC0.DT, DomTreeUpdater::UpdateStrategy::Lazy);
+    // DT.viewGraph();
+    SmallVector<DominatorTree::UpdateType, 8> TreeUpdates;
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC0.Header, FC0.ExitBlock));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Preheader, FC1.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Header, FC1.ExitBlock));
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC0.Header, new_bbl));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, new_bbl, FC1.Header));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Header, FC0.ExitBlock));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Preheader, FC1.ExitBlock));
+
+    
+    LLVM_DEBUG(dbgs() << "FC0 before MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 before MIC update: \n"; FC1.dump(););
+
+    FC1.ExitBlock = FC0.ExitBlock;
+    FC1.Preheader = new_bbl;
+    FC0.ExitBlock = new_bbl;
+
+
+    LLVM_DEBUG(dbgs() << "FC0 after MIC update: \n"; FC0.dump(););
+    LLVM_DEBUG(dbgs() << "FC1 after MIC update: \n"; FC1.dump(););
+
+
+    new_bbl = BasicBlock::Create(FC1.ExitBlock->getContext(), "fc1.exitbb", FC1.ExitBlock->getParent(), FC1.ExitBlock->getNextNode());
+  
+  
+   // Add a branch instruction to the newly formed basic block.
+    BI = BranchInst::Create(FC1.ExitBlock, new_bbl);
+
+    terminator = FC1.Header->getTerminator();
+    terminator->setSuccessor(1, new_bbl);
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Delete, FC1.Header, FC1.ExitBlock));
+
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, FC1.Header, new_bbl));
+    TreeUpdates.emplace_back(DominatorTree::UpdateType(DominatorTree::Insert, new_bbl, FC1.ExitBlock));
+
+    FC1.ExitBlock = new_bbl;
+
+
+
+    DTU.applyUpdates(TreeUpdates);
+    DTU.flush();
+    DT.viewGraph();
+    
+
+  }
+  
 
   bool isEmptyPreheader(const FusionCandidate &FC) const {
     return FC.Preheader->size() == 1;
@@ -1570,10 +1970,14 @@ private:
     if (FC0.GuardBranch)
       return fuseGuardedLoops(FC0, FC1);
 
-    assert(FC1.Preheader ==
-           (FC0.Peeled ? FC0.ExitBlock->getUniqueSuccessor() : FC0.ExitBlock));
-    assert(FC1.Preheader->size() == 1 &&
-           FC1.Preheader->getSingleSuccessor() == FC1.Header);
+    // LLVM_DEBUG(dbgs() << "FC1.Preheader size: " << FC1.Preheader->size() << '\n');
+    // // LLVM_DEBUG(dbgs() << "FC1.Preheader num successors " << FC1.Preheader->getTerminator()->getNumSuccessors() << '\n');
+    // LLVM_DEBUG(dbgs() << "FC1.Preheader successor " << FC1.Preheader->getSingleSuccessor()->getName() << " FC1.Header: " << FC1.Header->getName() << '\n');
+    // assert(FC1.Preheader ==
+    //        (FC0.Peeled ? FC0.ExitBlock->getUniqueSuccessor() : FC0.ExitBlock));
+    // assert(FC1.Preheader->size() == 1 &&
+    //        FC1.Preheader->getSingleSuccessor() == FC1.Header);
+    
 
     // Remember the phi nodes originally in the header of FC0 in order to rewire
     // them later. However, this is only necessary if the new loop carried
@@ -1636,11 +2040,13 @@ private:
     }
 
     // The pre-header of L1 is not necessary anymore.
-    assert(pred_empty(FC1.Preheader));
-    FC1.Preheader->getTerminator()->eraseFromParent();
-    new UnreachableInst(FC1.Preheader->getContext(), FC1.Preheader);
-    TreeUpdates.emplace_back(DominatorTree::UpdateType(
-        DominatorTree::Delete, FC1.Preheader, FC1.Header));
+    // assert(pred_empty(FC1.Preheader));
+    if (pred_empty(FC1.Preheader)) {
+      FC1.Preheader->getTerminator()->eraseFromParent();
+      new UnreachableInst(FC1.Preheader->getContext(), FC1.Preheader);
+      TreeUpdates.emplace_back(DominatorTree::UpdateType(
+          DominatorTree::Delete, FC1.Preheader, FC1.Header));
+    }
 
     // Moves the phi nodes from the second to the first loops header block.
     while (PHINode *PHI = dyn_cast<PHINode>(&FC1.Header->front())) {

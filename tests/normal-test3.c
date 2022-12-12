@@ -11,7 +11,8 @@ int main() {
     for (int i = 0; i < 5; ++i) {
         x = x + i;
     }
-
+    y = z;
+    z = x + y;
     for (int j = 0; j < 5; ++j) {
         y = y * (1 + j);
     }

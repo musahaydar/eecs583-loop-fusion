@@ -1,0 +1,42 @@
+yilegu@eecs583b:~/eecs583-loop-fusion/tests$ time ./test_no_opt < input.txt
+x: -1243309311 y: -243309212
+zzzzzz: 500 
+
+real    0m4.285s
+user    0m4.281s
+sys     0m0.006s
+yilegu@eecs583b:~/eecs583-loop-fusion/tests$ time ./test_no_opt < input.txt
+x: -1243309311 y: -243309212
+zzzzzz: 500 
+
+real    0m4.279s
+user    0m4.277s
+sys     0m0.003s
+yilegu@eecs583b:~/eecs583-loop-fusion/tests$ time ./test_no_opt < input.txt
+x: -1243309311 y: -243309212
+zzzzzz: 500 
+
+real    0m4.275s
+user    0m4.276s
+sys     0m0.000s
+yilegu@eecs583b:~/eecs583-loop-fusion/tests$ time ./test_fused < input.txt
+x: -1243309311 y: -243309212
+zzzzzz: 500 
+
+real    0m2.599s
+user    0m2.598s
+sys     0m0.002s
+yilegu@eecs583b:~/eecs583-loop-fusion/tests$ time ./test_fused < input.txt
+x: -1243309311 y: -243309212
+zzzzzz: 500 
+
+real    0m2.595s
+user    0m2.589s
+sys     0m0.008s
+yilegu@eecs583b:~/eecs583-loop-fusion/tests$ time ./test_fused < input.txt
+x: -1243309311 y: -243309212
+zzzzzz: 500 
+
+real    0m2.576s
+user    0m2.576s
+sys     0m0.002s
